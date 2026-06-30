@@ -6,9 +6,13 @@ import type { PanelPosition, ChannelPreset, LogFile, LogChannel } from '../types
 interface ChannelListProps {
   position: PanelPosition
   panelSize?: number
+  yAxisChannel?: string | null
+  onSetYAxis?: (name: string | null) => void
+  xAxisChannel?: string | null
+  onSetXAxis?: (name: string | null) => void
 }
 
-export default function ChannelList({ position, panelSize }: ChannelListProps) {
+export default function ChannelList({ position, panelSize, yAxisChannel, onSetYAxis, xAxisChannel, onSetXAxis }: ChannelListProps) {
   const {
     logFile, toggleChannel, setChannelColor,
     channelPresets, saveChannelPreset, deleteChannelPreset, applyChannelPreset
@@ -18,6 +22,7 @@ export default function ChannelList({ position, panelSize }: ChannelListProps) {
   const [pickerFor,   setPickerFor]   = useState<string | null>(null)
   const [showSave,    setShowSave]    = useState(false)
   const [presetRect,  setPresetRect]  = useState<DOMRect | null>(null)
+  const [ctxMenu,     setCtxMenu]     = useState<{ x: number; y: number; name: string } | null>(null)
   const presetBtnRef = useRef<HTMLButtonElement>(null)
 
   if (!logFile) return null
@@ -97,10 +102,29 @@ export default function ChannelList({ position, panelSize }: ChannelListProps) {
       {/* ── Channel items ── */}
       {isVertical ? (
         <VerticalList channels={filtered} pickerFor={pickerFor} setPickerFor={setPickerFor}
-          toggleChannel={toggleChannel} setChannelColor={setChannelColor} position={position} />
+          toggleChannel={toggleChannel} setChannelColor={setChannelColor} position={position}
+          yAxisChannel={yAxisChannel ?? null}
+          xAxisChannel={xAxisChannel ?? null}
+          onContextMenu={(name, x, y) => setCtxMenu({ x, y, name })} />
       ) : (
         <HorizontalList channels={filtered} pickerFor={pickerFor} setPickerFor={setPickerFor}
-          toggleChannel={toggleChannel} setChannelColor={setChannelColor} />
+          toggleChannel={toggleChannel} setChannelColor={setChannelColor}
+          yAxisChannel={yAxisChannel ?? null}
+          xAxisChannel={xAxisChannel ?? null}
+          onContextMenu={(name, x, y) => setCtxMenu({ x, y, name })} />
+      )}
+
+      {/* ── Channel right-click menu ── */}
+      {ctxMenu && (onSetYAxis || onSetXAxis) && (
+        <ChannelContextMenu
+          x={ctxMenu.x} y={ctxMenu.y}
+          name={ctxMenu.name}
+          isYAxis={yAxisChannel === ctxMenu.name}
+          isXAxis={xAxisChannel === ctxMenu.name}
+          onSetYAxis={onSetYAxis ? () => { onSetYAxis(yAxisChannel === ctxMenu.name ? null : ctxMenu.name); setCtxMenu(null) } : undefined}
+          onSetXAxis={onSetXAxis ? () => { onSetXAxis(xAxisChannel === ctxMenu.name ? null : ctxMenu.name); setCtxMenu(null) } : undefined}
+          onClose={() => setCtxMenu(null)}
+        />
       )}
 
       {/* ── Modals ── */}
@@ -397,7 +421,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 // ─── Horizontal (top / bottom) ───────────────────────────────────────────────
 
-function HorizontalList({ channels, pickerFor, setPickerFor, toggleChannel, setChannelColor }: ListProps) {
+function HorizontalList({ channels, pickerFor, setPickerFor, toggleChannel, setChannelColor, yAxisChannel, xAxisChannel, onContextMenu }: ListProps) {
   return (
     <div style={{ flex: 1, overflowX: 'auto', overflowY: 'hidden', display: 'flex', alignItems: 'center', padding: '0 10px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 0', minWidth: 'max-content' }}>
@@ -405,6 +429,9 @@ function HorizontalList({ channels, pickerFor, setPickerFor, toggleChannel, setC
           <ChannelChip
             key={ch.name} ch={ch} pickerFor={pickerFor} setPickerFor={setPickerFor}
             toggleChannel={toggleChannel} setChannelColor={setChannelColor} popupDir="up"
+            isYAxis={yAxisChannel === ch.name}
+            isXAxis={xAxisChannel === ch.name}
+            onContextMenu={onContextMenu}
           />
         ))}
       </div>
@@ -414,58 +441,77 @@ function HorizontalList({ channels, pickerFor, setPickerFor, toggleChannel, setC
 
 // ─── Vertical (left / right) ─────────────────────────────────────────────────
 
-function VerticalList({ channels, pickerFor, setPickerFor, toggleChannel, setChannelColor, position }: ListProps & { position: PanelPosition }) {
+function VerticalList({ channels, pickerFor, setPickerFor, toggleChannel, setChannelColor, position, yAxisChannel, xAxisChannel, onContextMenu }: ListProps & { position: PanelPosition }) {
   return (
     <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '4px 0' }}>
-      {channels.map((ch) => (
-        <div
-          key={ch.name}
-          onClick={() => toggleChannel(ch.name)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px',
-            cursor: 'pointer',
-            borderLeft: ch.visible ? `3px solid ${ch.color}` : '3px solid transparent',
-            background: ch.visible ? `${ch.color}0d` : 'transparent',
-            transition: 'background 0.15s'
-          }}
-        >
-          {/* Color dot */}
-          <div style={{ position: 'relative', flexShrink: 0 }}>
-            <span
-              onClick={(e) => { e.stopPropagation(); setPickerFor(pickerFor === ch.name ? null : ch.name) }}
-              style={{ display: 'block', width: 8, height: 8, borderRadius: '50%', background: ch.color, cursor: 'pointer', flexShrink: 0 }}
-            />
-            {pickerFor === ch.name && (
-              <ColorPicker
-                current={ch.color}
-                onPick={(c) => { setChannelColor(ch.name, c); setPickerFor(null) }}
-                onClose={() => setPickerFor(null)}
-                popupDir={position === 'left' ? 'right' : 'left'}
+      {channels.map((ch) => {
+        const isYAxis = yAxisChannel === ch.name
+        const isXAxis = xAxisChannel === ch.name
+        return (
+          <div
+            key={ch.name}
+            onClick={() => toggleChannel(ch.name)}
+            onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(ch.name, e.clientX, e.clientY) }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px',
+              cursor: 'pointer',
+              borderLeft: ch.visible ? `3px solid ${ch.color}` : '3px solid transparent',
+              background: isXAxis || isYAxis ? `${ch.color}20` : ch.visible ? `${ch.color}0d` : 'transparent',
+              transition: 'background 0.15s'
+            }}
+          >
+            {/* Color dot */}
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <span
+                onClick={(e) => { e.stopPropagation(); setPickerFor(pickerFor === ch.name ? null : ch.name) }}
+                style={{ display: 'block', width: 8, height: 8, borderRadius: '50%', background: ch.color, cursor: 'pointer', flexShrink: 0 }}
               />
-            )}
-          </div>
-
-          {/* Name + unit */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{
-              fontSize: 11, fontWeight: ch.visible ? 600 : 400,
-              color: ch.visible ? ch.color : 'var(--text-muted)',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3
-            }}>
-              {ch.name}
+              {pickerFor === ch.name && (
+                <ColorPicker
+                  current={ch.color}
+                  onPick={(c) => { setChannelColor(ch.name, c); setPickerFor(null) }}
+                  onClose={() => setPickerFor(null)}
+                  popupDir={position === 'left' ? 'right' : 'left'}
+                />
+              )}
             </div>
-            {ch.unit && (
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', opacity: 0.6, lineHeight: 1 }}>{ch.unit}</div>
-            )}
-          </div>
 
-          {/* Min / max */}
-          <div style={{ textAlign: 'right', flexShrink: 0 }}>
-            <div style={{ fontSize: 9, color: 'var(--text-muted)', lineHeight: 1.4 }}>{ch.max.toFixed(1)}</div>
-            <div style={{ fontSize: 9, color: 'var(--text-muted)', opacity: 0.5, lineHeight: 1.4 }}>{ch.min.toFixed(1)}</div>
+            {/* Name + unit */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: 'var(--ui-fs)', fontWeight: ch.visible ? 600 : 400,
+                color: ch.visible ? ch.color : 'var(--text-muted)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3
+              }}>
+                {ch.name}
+              </div>
+              {ch.unit && (
+                <div style={{ fontSize: 'var(--ui-fs-sm)', color: 'var(--text-muted)', opacity: 0.6, lineHeight: 1 }}>{ch.unit}</div>
+              )}
+            </div>
+
+            {/* Axis badges */}
+            {isXAxis && (
+              <span style={{
+                fontSize: 'var(--ui-fs-xs)', fontWeight: 800, padding: '1px 4px', borderRadius: 3,
+                background: ch.color, color: '#000', letterSpacing: '0.05em', flexShrink: 0
+              }}>X</span>
+            )}
+            {isYAxis && (
+              <span style={{
+                fontSize: 'var(--ui-fs-xs)', fontWeight: 800, padding: '1px 4px', borderRadius: 3,
+                background: ch.color, color: '#000', letterSpacing: '0.05em', flexShrink: 0
+              }}>Y</span>
+            )}
+
+            {/* Min / max */}
+            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+              <div style={{ fontSize: 'var(--ui-fs-xs)', color: 'var(--text-muted)', lineHeight: 1.4 }}>{ch.max.toFixed(1)}</div>
+              <div style={{ fontSize: 'var(--ui-fs-xs)', color: 'var(--text-muted)', opacity: 0.5, lineHeight: 1.4 }}>{ch.min.toFixed(1)}</div>
+            </div>
           </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -478,19 +524,23 @@ interface ListProps {
   setPickerFor: (n: string | null) => void
   toggleChannel: (n: string) => void
   setChannelColor: (n: string, c: string) => void
+  yAxisChannel?: string | null
+  xAxisChannel?: string | null
+  onContextMenu?: (name: string, x: number, y: number) => void
 }
 
-function ChannelChip({ ch, pickerFor, setPickerFor, toggleChannel, setChannelColor, popupDir }: ListProps & { ch: LogChannel; popupDir: 'up' | 'down' }) {
+function ChannelChip({ ch, pickerFor, setPickerFor, toggleChannel, setChannelColor, popupDir, isYAxis, isXAxis, onContextMenu }: ListProps & { ch: LogChannel; popupDir: 'up' | 'down'; isYAxis?: boolean; isXAxis?: boolean }) {
   return (
     <div style={{ position: 'relative' }}>
       <button
         onClick={() => toggleChannel(ch.name)}
+        onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(ch.name, e.clientX, e.clientY) }}
         style={{
           display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 20,
-          border: `1px solid ${ch.visible ? ch.color : 'var(--border)'}`,
-          background: ch.visible ? `${ch.color}18` : 'var(--bg)',
+          border: `1px solid ${isXAxis || isYAxis ? ch.color : ch.visible ? ch.color : 'var(--border)'}`,
+          background: isXAxis || isYAxis ? `${ch.color}28` : ch.visible ? `${ch.color}18` : 'var(--bg)',
           color: ch.visible ? ch.color : 'var(--text-muted)',
-          fontSize: 11, fontWeight: ch.visible ? 600 : 400, cursor: 'pointer',
+          fontSize: 'var(--ui-fs)', fontWeight: ch.visible ? 600 : 400, cursor: 'pointer',
           whiteSpace: 'nowrap', transition: 'border-color 0.15s, background 0.15s, color 0.15s'
         }}
       >
@@ -499,7 +549,9 @@ function ChannelChip({ ch, pickerFor, setPickerFor, toggleChannel, setChannelCol
           style={{ width: 7, height: 7, borderRadius: '50%', background: ch.color, display: 'inline-block', flexShrink: 0, cursor: 'pointer' }}
         />
         {ch.name}
-        {ch.unit && <span style={{ opacity: 0.55, fontSize: 10 }}>({ch.unit})</span>}
+        {ch.unit && <span style={{ opacity: 0.55, fontSize: 'var(--ui-fs-sm)' }}>({ch.unit})</span>}
+        {isXAxis && <span style={{ fontSize: 'var(--ui-fs-xs)', fontWeight: 800, background: ch.color, color: '#000', borderRadius: 3, padding: '0 3px' }}>X</span>}
+        {isYAxis && <span style={{ fontSize: 'var(--ui-fs-xs)', fontWeight: 800, background: ch.color, color: '#000', borderRadius: 3, padding: '0 3px' }}>Y</span>}
       </button>
       {pickerFor === ch.name && (
         <ColorPicker
@@ -510,6 +562,54 @@ function ChannelChip({ ch, pickerFor, setPickerFor, toggleChannel, setChannelCol
         />
       )}
     </div>
+  )
+}
+
+// ─── Channel right-click context menu ────────────────────────────────────────
+
+function ChannelContextMenu({ x, y, name, isYAxis, isXAxis, onSetYAxis, onSetXAxis, onClose }: {
+  x: number; y: number; name: string; isYAxis: boolean; isXAxis: boolean
+  onSetYAxis?: () => void; onSetXAxis?: () => void; onClose: () => void
+}) {
+  const menuItems = [
+    ...(onSetXAxis ? [{ label: isXAxis ? 'Remove X Axis' : 'Set as X Axis', onClick: onSetXAxis }] : []),
+    ...(onSetYAxis ? [{ label: isYAxis ? 'Remove Y Axis' : 'Set as Y Axis', onClick: onSetYAxis }] : []),
+  ]
+
+  return (
+    <>
+      <div
+        style={{ position: 'fixed', inset: 0, zIndex: 499 }}
+        onClick={onClose}
+        onContextMenu={(e) => { e.preventDefault(); onClose() }}
+      />
+      <div style={{
+        position: 'fixed', top: y, left: x, zIndex: 500,
+        background: 'var(--surface)', border: '1px solid var(--border)',
+        borderRadius: 7, boxShadow: '0 10px 32px rgba(0,0,0,0.7)',
+        overflow: 'hidden', minWidth: 170
+      }}>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', padding: '7px 14px 4px', opacity: 0.55, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          {name}
+        </div>
+        <div style={{ height: 1, background: 'var(--border)', margin: '0 8px 4px' }} />
+        {menuItems.map((item) => (
+          <button
+            key={item.label}
+            onClick={(e) => { e.stopPropagation(); item.onClick() }}
+            style={{
+              display: 'block', width: '100%', textAlign: 'left',
+              padding: '8px 14px', border: 'none', background: 'transparent',
+              color: 'var(--text)', fontSize: 12, cursor: 'pointer'
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </>
   )
 }
 

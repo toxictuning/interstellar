@@ -1,7 +1,13 @@
 import { useState } from 'react'
 import { useStore } from '../store'
 import { THEMES, DEFAULT_CHANNEL_COLORS, BRAND_RED } from '../themes'
-import type { ThemeName, PanelPosition } from '../types'
+import type { ThemeName, PanelPosition, FontSize } from '../types'
+
+const FONT_SIZES: { value: FontSize; label: string; preview: string }[] = [
+  { value: 'small',  label: 'Small',  preview: 'Aa' },
+  { value: 'normal', label: 'Normal', preview: 'Aa' },
+  { value: 'large',  label: 'Large',  preview: 'Aa' },
+]
 
 const POSITIONS: { value: PanelPosition; label: string; icon: React.ReactNode }[] = [
   {
@@ -117,6 +123,33 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                 {THEMES[t].label}
               </button>
             ))}
+          </div>
+        </Section>
+
+        {/* Font size */}
+        <Section label="Font Size">
+          <div style={{ display: 'flex', gap: 8 }}>
+            {FONT_SIZES.map(({ value, label, preview }) => {
+              const active = (settings.fontSize ?? 'normal') === value
+              const previewSize = value === 'small' ? 11 : value === 'large' ? 18 : 14
+              return (
+                <button
+                  key={value}
+                  onClick={() => setSettings({ fontSize: value })}
+                  style={{
+                    flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                    padding: '10px 8px', borderRadius: 8,
+                    border: `1px solid ${active ? BRAND_RED : 'var(--border)'}`,
+                    background: active ? 'rgba(229,0,10,0.1)' : 'var(--bg)',
+                    color: active ? BRAND_RED : 'var(--text-muted)',
+                    cursor: 'pointer', transition: 'all 0.15s'
+                  }}
+                >
+                  <span style={{ fontSize: previewSize, fontWeight: 700, lineHeight: 1 }}>{preview}</span>
+                  <span style={{ fontSize: 10, fontWeight: active ? 700 : 400, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{label}</span>
+                </button>
+              )
+            })}
           </div>
         </Section>
 

@@ -30,6 +30,10 @@ export default function LogViewer() {
 
   // Smoothing — stored as half-window radius (0 = raw, max 50)
   const [smoothing, setSmoothing] = useState(0)
+  // Y-axis pin — one channel name whose range locks the Y scale
+  const [yAxisChannel, setYAxisChannel] = useState<string | null>(null)
+  // X-axis channel — switches the chart into XY plot mode
+  const [xAxisChannel, setXAxisChannel] = useState<string | null>(null)
 
   if (!logFile) return null
 
@@ -49,7 +53,7 @@ export default function LogViewer() {
     chartRef.current?.exportPng(`${base}.png`)
   }
 
-  const channelList = <ChannelList position={pos} panelSize={panelSize} />
+  const channelList = <ChannelList position={pos} panelSize={panelSize} yAxisChannel={yAxisChannel} onSetYAxis={setYAxisChannel} xAxisChannel={xAxisChannel} onSetXAxis={setXAxisChannel} />
 
   const resizeHandle = (
     <ResizeHandle
@@ -140,8 +144,8 @@ export default function LogViewer() {
         {/* Chart area */}
         <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {viewMode === 'raw'    ? <RawView   logFile={logFile} /> :
-           viewMode === 'split'  ? <SplitView smoothing={smoothing} /> :
-                                   <SingleView chartRef={chartRef} smoothing={smoothing} />}
+           viewMode === 'split'  ? <SplitView smoothing={smoothing} yAxisChannel={yAxisChannel} xAxisChannel={xAxisChannel} /> :
+                                   <SingleView chartRef={chartRef} smoothing={smoothing} yAxisChannel={yAxisChannel} xAxisChannel={xAxisChannel} onResetYAxis={() => setYAxisChannel(null)} onResetXAxis={() => setXAxisChannel(null)} />}
         </div>
 
         {pos === 'right'  && <>{resizeHandle}{channelList}</>}
@@ -210,10 +214,18 @@ function ResizeHandle({
 
 // ─── Views ────────────────────────────────────────────────────────────────────
 
-function SingleView({ chartRef, smoothing }: { chartRef: React.Ref<ChartHandle>; smoothing: number }) {
+function SingleView({ chartRef, smoothing, yAxisChannel, xAxisChannel, onResetYAxis, onResetXAxis }: {
+  chartRef: React.Ref<ChartHandle>
+  smoothing: number
+  yAxisChannel: string | null
+  xAxisChannel: string | null
+  onResetYAxis: () => void
+  onResetXAxis: () => void
+}) {
   const { logFile } = useStore()
   const containerRef = useRef<HTMLDivElement>(null)
   const [h, setH] = useState(400)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -225,14 +237,30 @@ function SingleView({ chartRef, smoothing }: { chartRef: React.Ref<ChartHandle>;
   }, [])
 
   if (!logFile) return null
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if (!yAxisChannel && !xAxisChannel) return
+    e.preventDefault()
+    setCtxMenu({ x: e.clientX, y: e.clientY })
+  }
+
+  const menuItems = [
+    ...(xAxisChannel ? [{ label: `Reset X Axis (${xAxisChannel})`, onClick: () => { onResetXAxis(); setCtxMenu(null) } }] : []),
+    ...(yAxisChannel ? [{ label: `Reset Y Axis (${yAxisChannel})`, onClick: () => { onResetYAxis(); setCtxMenu(null) } }] : []),
+  ]
+
   return (
-    <div ref={containerRef} style={{ flex: 1, minHeight: 0, padding: '4px 6px 0', overflow: 'hidden' }}>
-      <Chart ref={chartRef} logFile={logFile} height={h} smoothing={smoothing} />
+    <div ref={containerRef} style={{ flex: 1, minHeight: 0, padding: '4px 6px 0', overflow: 'hidden' }}
+      onContextMenu={handleContextMenu}>
+      <Chart ref={chartRef} logFile={logFile} height={h} smoothing={smoothing} yAxisChannel={yAxisChannel} xAxisChannel={xAxisChannel} />
+      {ctxMenu && menuItems.length > 0 && (
+        <ContextMenu x={ctxMenu.x} y={ctxMenu.y} items={menuItems} onClose={() => setCtxMenu(null)} />
+      )}
     </div>
   )
 }
 
-function SplitView({ smoothing }: { smoothing: number }) {
+function SplitView({ smoothing, yAxisChannel, xAxisChannel }: { smoothing: number; yAxisChannel: string | null; xAxisChannel: string | null }) {
   const { logFile } = useStore()
   if (!logFile) return null
   const visible = logFile.channels.filter((c) => c.visible)
@@ -254,7 +282,7 @@ function SplitView({ smoothing }: { smoothing: number }) {
             <div style={{ fontSize: 11, fontWeight: 600, color: ch.color, marginBottom: 2, paddingLeft: 2 }}>
               {ch.name}{ch.unit ? ` (${ch.unit})` : ''}
             </div>
-            <Chart logFile={sf} height={168} smoothing={smoothing} />
+            <Chart logFile={sf} height={168} smoothing={smoothing} yAxisChannel={yAxisChannel} xAxisChannel={xAxisChannel} />
           </div>
         )
       })}
@@ -392,6 +420,44 @@ function SmoothSlider({ value, onChange }: { value: number; onChange: (v: number
         {value === 0 ? 'off' : value}
       </span>
     </div>
+  )
+}
+
+function ContextMenu({ x, y, items, onClose }: {
+  x: number; y: number
+  items: { label: string; onClick: () => void }[]
+  onClose: () => void
+}) {
+  return (
+    <>
+      <div
+        style={{ position: 'fixed', inset: 0, zIndex: 499 }}
+        onClick={onClose}
+        onContextMenu={(e) => { e.preventDefault(); onClose() }}
+      />
+      <div style={{
+        position: 'fixed', top: y, left: x, zIndex: 500,
+        background: 'var(--surface)', border: '1px solid var(--border)',
+        borderRadius: 7, boxShadow: '0 10px 32px rgba(0,0,0,0.7)',
+        overflow: 'hidden', minWidth: 160
+      }}>
+        {items.map((item) => (
+          <button
+            key={item.label}
+            onClick={(e) => { e.stopPropagation(); item.onClick() }}
+            style={{
+              display: 'block', width: '100%', textAlign: 'left',
+              padding: '8px 14px', border: 'none', background: 'transparent',
+              color: 'var(--text)', fontSize: 12, cursor: 'pointer'
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </>
   )
 }
 
