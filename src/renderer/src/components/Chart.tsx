@@ -4,6 +4,7 @@ import 'uplot/dist/uPlot.min.css'
 import type { LogFile, LogChannel } from '../types'
 import { BRAND_RED } from '../themes'
 import logoSrc from '../assets/logo.png'
+import { useStore } from '../store'
 
 export interface ChartHandle {
   exportPng: (filename: string) => void
@@ -19,9 +20,12 @@ const Chart = React.forwardRef<ChartHandle, ChartProps>(function Chart(
   { logFile, height = 400, smoothing = 0 },
   ref
 ) {
+  const theme        = useStore((s) => s.settings.theme)
   const containerRef = useRef<HTMLDivElement>(null)
-  const plotRef     = useRef<uPlot | null>(null)
-  const logoImgRef  = useRef<HTMLImageElement | null>(null)
+  const plotRef      = useRef<uPlot | null>(null)
+  const logoImgRef   = useRef<HTMLImageElement | null>(null)
+  const smoothingRef = useRef(smoothing)
+  smoothingRef.current = smoothing
 
   // Pre-load the logo once so exportPng can draw it synchronously
   useEffect(() => {
@@ -159,8 +163,14 @@ const Chart = React.forwardRef<ChartHandle, ChartProps>(function Chart(
 
     const data: uPlot.AlignedData = [
       new Float64Array(logFile.timestamps),
-      ...visibleChannels.map((ch) => new Float64Array(movingAvg(ch.data, smoothing)))
+      ...visibleChannels.map((ch) => new Float64Array(movingAvg(ch.data, smoothingRef.current)))
     ]
+
+    // Stroke functions are called by uPlot on every redraw so they always
+    // read the current CSS variables — this is what keeps grid/axis colours
+    // in sync when the theme changes without rebuilding the chart.
+    const axisStroke = () => getCSS('--axis')
+    const gridStroke = () => getCSS('--grid')
 
     const opts: uPlot.Options = {
       width: w,
@@ -175,16 +185,16 @@ const Chart = React.forwardRef<ChartHandle, ChartProps>(function Chart(
       scales: { x: { time: false }, y: { auto: true } },
       axes: [
         {
-          stroke: getCSS('--axis'),
-          grid: { stroke: getCSS('--grid'), width: 1 },
-          ticks: { stroke: getCSS('--axis') },
+          stroke: axisStroke,
+          grid: { stroke: gridStroke, width: 1 },
+          ticks: { stroke: axisStroke },
           font: '11px Inter, sans-serif',
           labelFont: '11px Inter, sans-serif'
         },
         {
-          stroke: getCSS('--axis'),
-          grid: { stroke: getCSS('--grid'), width: 1 },
-          ticks: { stroke: getCSS('--axis') },
+          stroke: axisStroke,
+          grid: { stroke: gridStroke, width: 1 },
+          ticks: { stroke: axisStroke },
           font: '11px Inter, sans-serif',
           labelFont: '11px Inter, sans-serif',
           size: 70
@@ -212,7 +222,24 @@ const Chart = React.forwardRef<ChartHandle, ChartProps>(function Chart(
       plotRef.current?.destroy()
       plotRef.current = null
     }
-  }, [logFile, visibleChannels.map((c) => c.name + c.color).join(), height, smoothing])
+  }, [logFile, visibleChannels.map((c) => c.name + c.color).join(), height])
+
+  // Smoothing changes: update data in-place so zoom is preserved
+  useEffect(() => {
+    if (!plotRef.current || !logFile || visibleChannels.length === 0) return
+    const newData: uPlot.AlignedData = [
+      new Float64Array(logFile.timestamps),
+      ...visibleChannels.map((ch) => new Float64Array(movingAvg(ch.data, smoothing)))
+    ]
+    plotRef.current.setData(newData, false)
+  }, [smoothing])
+
+  // Theme changes: stroke functions already read CSS on every draw;
+  // force one immediate redraw so colours update without waiting for
+  // the next interaction
+  useEffect(() => {
+    plotRef.current?.redraw(false, true)
+  }, [theme])
 
   const panTo = useCallback((min: number, max: number) => {
     if (!plotRef.current) return
