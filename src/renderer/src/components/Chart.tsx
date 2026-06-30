@@ -3,6 +3,7 @@ import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import type { LogFile, LogChannel } from '../types'
 import { BRAND_RED } from '../themes'
+import logoSrc from '../assets/logo.png'
 
 export interface ChartHandle {
   exportPng: (filename: string) => void
@@ -19,7 +20,15 @@ const Chart = React.forwardRef<ChartHandle, ChartProps>(function Chart(
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const plotRef = useRef<uPlot | null>(null)
+  const plotRef     = useRef<uPlot | null>(null)
+  const logoImgRef  = useRef<HTMLImageElement | null>(null)
+
+  // Pre-load the logo once so exportPng can draw it synchronously
+  useEffect(() => {
+    const img = new Image()
+    img.onload = () => { logoImgRef.current = img }
+    img.src = logoSrc
+  }, [])
 
   const fullMin = logFile.timestamps[0]
   const fullMax = logFile.timestamps[logFile.timestamps.length - 1]
@@ -41,7 +50,9 @@ const Chart = React.forwardRef<ChartHandle, ChartProps>(function Chart(
       const srcCanvas = plotRef.current?.ctx.canvas
       if (!srcCanvas) return
 
-      // Composite onto a fresh canvas so the background is filled
+      const dpr = window.devicePixelRatio || 1
+
+      // Composite chart onto a fresh canvas with opaque bg
       const out = document.createElement('canvas')
       out.width  = srcCanvas.width
       out.height = srcCanvas.height
@@ -50,16 +61,71 @@ const Chart = React.forwardRef<ChartHandle, ChartProps>(function Chart(
       ctx.fillRect(0, 0, out.width, out.height)
       ctx.drawImage(srcCanvas, 0, 0)
 
-      // Watermark — bottom-right, scales with DPR so it's crisp on HiDPI screens
-      const dpr = window.devicePixelRatio || 1
-      const pad = Math.round(12 * dpr)
+      // ── Watermark stamp (bottom-right) ──────────────────────────────
+      // Layout:
+      //   ┌─[2px red bar]──────────────────────────┐
+      //   │  [logo ~26px tall]                      │
+      //   │  filename (small, muted)                │
+      //   └─────────────────────────────────────────┘
+
+      const outerPad  = Math.round(14 * dpr)   // margin from canvas edge
+      const innerPadX = Math.round(10 * dpr)
+      const innerPadY = Math.round(8  * dpr)
+      const logoH     = Math.round(26 * dpr)
+      const textSize  = Math.round(9  * dpr)
+      const gap       = Math.round(5  * dpr)
+      const barW      = Math.round(2.5 * dpr)
+      const radius    = Math.round(5  * dpr)
+
+      // Measure filename text
+      const label = filename.replace(/\.png$/i, '')
+      ctx.font = `500 ${textSize}px Inter, system-ui, sans-serif`
+      const textW = ctx.measureText(label).width
+
+      // Compute logo width (maintain aspect ratio)
+      const logo    = logoImgRef.current
+      const logoW   = logo ? Math.round(logo.naturalWidth * (logoH / logo.naturalHeight)) : 0
+      const contentW = Math.max(logoW, textW)
+      const panelW   = contentW + innerPadX * 2 + barW
+      const panelH   = logoH + gap + textSize + innerPadY * 2
+
+      const px = out.width  - panelW - outerPad
+      const py = out.height - panelH - outerPad
+
       ctx.save()
-      ctx.font = `700 ${Math.round(10 * dpr)}px Inter, system-ui, sans-serif`
-      ctx.textAlign = 'right'
-      ctx.textBaseline = 'bottom'
-      ctx.fillStyle = 'rgba(229,0,10,0.50)'
-      ctx.fillText('LogView · Toxic Tuning', out.width - pad, out.height - pad)
+
+      // Panel background (dark, slightly transparent)
+      ctx.globalAlpha = 0.82
+      ctx.fillStyle = '#08080c'
+      ctx.beginPath()
+      ctx.roundRect(px, py, panelW, panelH, radius)
+      ctx.fill()
+
+      // Brand red left bar
+      ctx.globalAlpha = 0.95
+      ctx.fillStyle = BRAND_RED
+      ctx.beginPath()
+      ctx.roundRect(px, py, barW, panelH, [radius, 0, 0, radius])
+      ctx.fill()
+
+      // Logo image
+      if (logo) {
+        ctx.globalAlpha = 0.92
+        const logoX = px + barW + innerPadX
+        const logoY = py + innerPadY
+        ctx.drawImage(logo, logoX, logoY, logoW, logoH)
+      }
+
+      // Filename label
+      ctx.globalAlpha = 0.65
+      ctx.fillStyle = '#c8ccd8'
+      ctx.font = `500 ${textSize}px Inter, system-ui, sans-serif`
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'top'
+      ctx.fillText(label, px + barW + innerPadX, py + innerPadY + logoH + gap)
+
       ctx.restore()
+      // ── end watermark ───────────────────────────────────────────────
 
       const link = document.createElement('a')
       link.download = filename
