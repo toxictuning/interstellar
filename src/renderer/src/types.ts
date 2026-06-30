@@ -29,6 +29,15 @@ export interface AppSettings {
 
 export type ThemeName = 'dark' | 'midnight' | 'light' | 'nord' | 'solarized'
 
+export interface ChannelPreset {
+  id: string
+  name: string
+  logger: string       // e.g. "VCDS", "MoTeC" — display label only
+  channels: string[]   // channel names that should be visible
+  createdAt: number
+  lastUsedAt: number   // updated each time the preset is applied
+}
+
 export interface Theme {
   name: ThemeName
   label: string
