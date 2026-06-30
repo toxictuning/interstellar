@@ -24,8 +24,9 @@ const Chart = React.forwardRef<ChartHandle, ChartProps>(function Chart(
   const containerRef = useRef<HTMLDivElement>(null)
   const plotRef      = useRef<uPlot | null>(null)
   const logoImgRef   = useRef<HTMLImageElement | null>(null)
-  const smoothingRef = useRef(smoothing)
-  smoothingRef.current = smoothing
+  // Persist the zoom window across rebuilds (smoothing/theme changes should not reset zoom)
+  const zoomMinRef   = useRef<number | null>(null)
+  const zoomMaxRef   = useRef<number | null>(null)
 
   // Pre-load the logo once so exportPng can draw it synchronously
   useEffect(() => {
@@ -44,6 +45,8 @@ const Chart = React.forwardRef<ChartHandle, ChartProps>(function Chart(
   const isZoomed = viewMin > fullMin + 1e-9 || viewMax < fullMax - 1e-9
 
   const onViewChange = useCallback((min: number, max: number) => {
+    zoomMinRef.current = min
+    zoomMaxRef.current = max
     setViewMin(min)
     setViewMax(max)
   }, [])
@@ -144,8 +147,6 @@ const Chart = React.forwardRef<ChartHandle, ChartProps>(function Chart(
 
     plotRef.current?.destroy()
     plotRef.current = null
-    setViewMin(fullMin)
-    setViewMax(fullMax)
 
     const el = containerRef.current
     const w = el.clientWidth || 800
@@ -163,7 +164,7 @@ const Chart = React.forwardRef<ChartHandle, ChartProps>(function Chart(
 
     const data: uPlot.AlignedData = [
       new Float64Array(logFile.timestamps),
-      ...visibleChannels.map((ch) => new Float64Array(movingAvg(ch.data, smoothingRef.current)))
+      ...visibleChannels.map((ch) => new Float64Array(movingAvg(ch.data, smoothing)))
     ]
 
     // Stroke functions are called by uPlot on every redraw so they always
@@ -208,7 +209,32 @@ const Chart = React.forwardRef<ChartHandle, ChartProps>(function Chart(
       ]
     }
 
-    plotRef.current = new uPlot(opts, data, el)
+    const u = new uPlot(opts, data, el)
+    plotRef.current = u
+
+    // Restore previous zoom if the x-range overlaps the new data.
+    // This preserves zoom when smoothing/theme change triggers a rebuild.
+    // When a new file is loaded (different timestamps), the saved zoom
+    // falls outside the new range and is silently discarded.
+    const savedMin = zoomMinRef.current
+    const savedMax = zoomMaxRef.current
+    if (savedMin !== null && savedMax !== null) {
+      const clampMin = Math.max(fullMin, savedMin)
+      const clampMax = Math.min(fullMax, savedMax)
+      if (clampMin < clampMax - 1e-9) {
+        u.setScale('x', { min: clampMin, max: clampMax })
+        setViewMin(clampMin)
+        setViewMax(clampMax)
+      } else {
+        zoomMinRef.current = null
+        zoomMaxRef.current = null
+        setViewMin(fullMin)
+        setViewMax(fullMax)
+      }
+    } else {
+      setViewMin(fullMin)
+      setViewMax(fullMax)
+    }
 
     const ro = new ResizeObserver(() => {
       if (plotRef.current && el.clientWidth > 0) {
@@ -222,17 +248,7 @@ const Chart = React.forwardRef<ChartHandle, ChartProps>(function Chart(
       plotRef.current?.destroy()
       plotRef.current = null
     }
-  }, [logFile, visibleChannels.map((c) => c.name + c.color).join(), height])
-
-  // Smoothing changes: update data in-place so zoom is preserved
-  useEffect(() => {
-    if (!plotRef.current || !logFile || visibleChannels.length === 0) return
-    const newData: uPlot.AlignedData = [
-      new Float64Array(logFile.timestamps),
-      ...visibleChannels.map((ch) => new Float64Array(movingAvg(ch.data, smoothing)))
-    ]
-    plotRef.current.setData(newData, false)
-  }, [smoothing])
+  }, [logFile, visibleChannels.map((c) => c.name + c.color).join(), height, smoothing])
 
   // Theme changes: stroke functions already read CSS on every draw;
   // force one immediate redraw so colours update without waiting for
