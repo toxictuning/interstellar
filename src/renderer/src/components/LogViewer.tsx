@@ -26,6 +26,9 @@ export default function LogViewer() {
   // Chart ref for PNG export
   const chartRef = useRef<ChartHandle>(null)
 
+  // Smoothing — stored as half-window radius (0 = raw, max 50)
+  const [smoothing, setSmoothing] = useState(0)
+
   if (!logFile) return null
 
   const openNew = async () => {
@@ -72,6 +75,8 @@ export default function LogViewer() {
         </span>
 
         <div style={{ flex: 1 }} />
+
+        <SmoothSlider value={smoothing} onChange={setSmoothing} />
 
         {/* Export PNG — only in single view */}
         {viewMode === 'single' && (
@@ -121,8 +126,8 @@ export default function LogViewer() {
         {/* Chart area */}
         <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {viewMode === 'raw'    ? <RawView   logFile={logFile} /> :
-           viewMode === 'split'  ? <SplitView /> :
-                                   <SingleView chartRef={chartRef} />}
+           viewMode === 'split'  ? <SplitView smoothing={smoothing} /> :
+                                   <SingleView chartRef={chartRef} smoothing={smoothing} />}
         </div>
 
         {pos === 'right'  && <>{resizeHandle}{channelList}</>}
@@ -190,7 +195,7 @@ function ResizeHandle({
 
 // ─── Views ────────────────────────────────────────────────────────────────────
 
-function SingleView({ chartRef }: { chartRef: React.Ref<ChartHandle> }) {
+function SingleView({ chartRef, smoothing }: { chartRef: React.Ref<ChartHandle>; smoothing: number }) {
   const { logFile } = useStore()
   const containerRef = useRef<HTMLDivElement>(null)
   const [h, setH] = useState(400)
@@ -207,12 +212,12 @@ function SingleView({ chartRef }: { chartRef: React.Ref<ChartHandle> }) {
   if (!logFile) return null
   return (
     <div ref={containerRef} style={{ flex: 1, minHeight: 0, padding: '4px 6px 0', overflow: 'hidden' }}>
-      <Chart ref={chartRef} logFile={logFile} height={h} />
+      <Chart ref={chartRef} logFile={logFile} height={h} smoothing={smoothing} />
     </div>
   )
 }
 
-function SplitView() {
+function SplitView({ smoothing }: { smoothing: number }) {
   const { logFile } = useStore()
   if (!logFile) return null
   const visible = logFile.channels.filter((c) => c.visible)
@@ -234,7 +239,7 @@ function SplitView() {
             <div style={{ fontSize: 11, fontWeight: 600, color: ch.color, marginBottom: 2, paddingLeft: 2 }}>
               {ch.name}{ch.unit ? ` (${ch.unit})` : ''}
             </div>
-            <Chart logFile={sf} height={168} />
+            <Chart logFile={sf} height={168} smoothing={smoothing} />
           </div>
         )
       })}
@@ -305,6 +310,73 @@ function ToolbarBtn({ children, onClick, title }: { children: React.ReactNode; o
     >
       {children}
     </button>
+  )
+}
+
+function SmoothSlider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const trackRef = useRef<HTMLDivElement>(null)
+  const MAX = 50
+  const pct = value / MAX
+
+  const update = (clientX: number) => {
+    if (!trackRef.current) return
+    const rect = trackRef.current.getBoundingClientRect()
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+    onChange(Math.round(ratio * MAX))
+  }
+
+  const onMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault()
+    update(e.clientX)
+    const onMove = (me: MouseEvent) => update(me.clientX)
+    const onUp   = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+
+  const active = value > 0
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 4px' }}>
+      <span style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', userSelect: 'none' }}>
+        Smooth
+      </span>
+      <div
+        ref={trackRef}
+        onMouseDown={onMouseDown}
+        style={{ width: 72, height: 16, position: 'relative', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+      >
+        {/* Track */}
+        <div style={{ position: 'absolute', left: 0, right: 0, height: 3, borderRadius: 2, background: 'var(--border)' }} />
+        {/* Fill */}
+        {active && (
+          <div style={{
+            position: 'absolute', left: 0, width: `${pct * 100}%`,
+            height: 3, borderRadius: 2,
+            background: `linear-gradient(to right, rgba(229,0,10,0.4), ${BRAND_RED})`
+          }} />
+        )}
+        {/* Thumb */}
+        <div style={{
+          position: 'absolute',
+          left: `${pct * 100}%`,
+          transform: 'translateX(-50%)',
+          width: 10, height: 10, borderRadius: '50%',
+          background: active ? BRAND_RED : 'var(--axis)',
+          boxShadow: active ? `0 0 6px rgba(229,0,10,0.6)` : 'none',
+          transition: 'background 0.15s, box-shadow 0.15s',
+          pointerEvents: 'none'
+        }} />
+      </div>
+      <span style={{
+        fontSize: 10, minWidth: 14, textAlign: 'right',
+        color: active ? BRAND_RED : 'var(--text-muted)',
+        opacity: active ? 1 : 0.4,
+        transition: 'color 0.15s, opacity 0.15s',
+        userSelect: 'none'
+      }}>
+        {value === 0 ? 'off' : value}
+      </span>
+    </div>
   )
 }
 

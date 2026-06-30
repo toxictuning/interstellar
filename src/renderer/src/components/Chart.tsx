@@ -11,10 +11,11 @@ export interface ChartHandle {
 interface ChartProps {
   logFile: LogFile
   height?: number
+  smoothing?: number  // half-window radius in samples (0 = raw)
 }
 
 const Chart = React.forwardRef<ChartHandle, ChartProps>(function Chart(
-  { logFile, height = 400 },
+  { logFile, height = 400, smoothing = 0 },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -81,7 +82,7 @@ const Chart = React.forwardRef<ChartHandle, ChartProps>(function Chart(
 
     const data: uPlot.AlignedData = [
       new Float64Array(logFile.timestamps),
-      ...visibleChannels.map((ch) => new Float64Array(ch.data))
+      ...visibleChannels.map((ch) => new Float64Array(movingAvg(ch.data, smoothing)))
     ]
 
     const opts: uPlot.Options = {
@@ -134,7 +135,7 @@ const Chart = React.forwardRef<ChartHandle, ChartProps>(function Chart(
       plotRef.current?.destroy()
       plotRef.current = null
     }
-  }, [logFile, visibleChannels.map((c) => c.name + c.color).join(), height])
+  }, [logFile, visibleChannels.map((c) => c.name + c.color).join(), height, smoothing])
 
   const panTo = useCallback((min: number, max: number) => {
     if (!plotRef.current) return
@@ -328,6 +329,33 @@ function tooltipPlugin(channels: LogChannel[]): uPlot.Plugin {
       }
     }
   }
+}
+
+// Centered moving average — O(n) sliding window, NaN-safe, no phase lag
+function movingAvg(data: number[], radius: number): number[] {
+  if (radius <= 0 || data.length === 0) return data
+
+  const n   = data.length
+  const out = new Array<number>(n)
+  let sum = 0, cnt = 0
+
+  // Seed the window: right half for index 0
+  for (let j = 0; j <= Math.min(radius, n - 1); j++) {
+    if (!isNaN(data[j])) { sum += data[j]; cnt++ }
+  }
+
+  for (let i = 0; i < n; i++) {
+    // Expand right edge
+    const ri = i + radius + 1
+    if (ri < n && !isNaN(data[ri])) { sum += data[ri]; cnt++ }
+    // Shrink left edge
+    const li = i - radius
+    if (li > 0 && !isNaN(data[li - 1])) { sum -= data[li - 1]; cnt-- }
+
+    out[i] = cnt > 0 ? sum / cnt : NaN
+  }
+
+  return out
 }
 
 function wheelZoomPlugin(
