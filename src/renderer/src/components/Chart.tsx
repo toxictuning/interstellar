@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import type { LogFile } from '../types'
+import { BRAND_RED } from '../themes'
 
 interface ChartProps {
   logFile: LogFile
@@ -11,9 +12,20 @@ interface ChartProps {
 export default function Chart({ logFile, height = 400 }: ChartProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const plotRef = useRef<uPlot | null>(null)
-  const [isZoomed, setIsZoomed] = useState(false)
+
+  const fullMin = logFile.timestamps[0]
+  const fullMax = logFile.timestamps[logFile.timestamps.length - 1]
+
+  const [viewMin, setViewMin] = useState(fullMin)
+  const [viewMax, setViewMax] = useState(fullMax)
 
   const visibleChannels = logFile.channels.filter((c) => c.visible)
+  const isZoomed = viewMin > fullMin + 1e-9 || viewMax < fullMax - 1e-9
+
+  const onViewChange = useCallback((min: number, max: number) => {
+    setViewMin(min)
+    setViewMax(max)
+  }, [])
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -21,13 +33,12 @@ export default function Chart({ logFile, height = 400 }: ChartProps) {
 
     plotRef.current?.destroy()
     plotRef.current = null
-    setIsZoomed(false)
+    setViewMin(fullMin)
+    setViewMax(fullMax)
 
     const el = containerRef.current
     const w = el.clientWidth || 800
-
-    const fullXMin = logFile.timestamps[0]
-    const fullXMax = logFile.timestamps[logFile.timestamps.length - 1]
+    const chartH = height - 24  // reserve 24px for the scrollbar
 
     const series: uPlot.Series[] = [
       { label: 'Time' },
@@ -46,7 +57,7 @@ export default function Chart({ logFile, height = 400 }: ChartProps) {
 
     const opts: uPlot.Options = {
       width: w,
-      height,
+      height: chartH,
       class: 'logview-chart',
       cursor: {
         sync: { key: 'logview' },
@@ -54,10 +65,7 @@ export default function Chart({ logFile, height = 400 }: ChartProps) {
       },
       select: { show: false, left: 0, top: 0, width: 0, height: 0 },
       legend: { show: false },
-      scales: {
-        x: { time: false },
-        y: { auto: true }
-      },
+      scales: { x: { time: false }, y: { auto: true } },
       axes: [
         {
           stroke: getCSS('--axis'),
@@ -78,7 +86,7 @@ export default function Chart({ logFile, height = 400 }: ChartProps) {
       series,
       plugins: [
         tooltipPlugin(),
-        wheelZoomPlugin(fullXMin, fullXMax, setIsZoomed)
+        wheelZoomPlugin(fullMin, fullMax, onViewChange)
       ]
     }
 
@@ -86,7 +94,7 @@ export default function Chart({ logFile, height = 400 }: ChartProps) {
 
     const ro = new ResizeObserver(() => {
       if (plotRef.current && el.clientWidth > 0) {
-        plotRef.current.setSize({ width: el.clientWidth, height })
+        plotRef.current.setSize({ width: el.clientWidth, height: chartH })
       }
     })
     ro.observe(el)
@@ -98,44 +106,57 @@ export default function Chart({ logFile, height = 400 }: ChartProps) {
     }
   }, [logFile, visibleChannels.map((c) => c.name + c.color).join(), height])
 
-  const resetZoom = () => {
+  const panTo = useCallback((min: number, max: number) => {
     if (!plotRef.current) return
-    const ts = logFile.timestamps
-    plotRef.current.setScale('x', { min: ts[0], max: ts[ts.length - 1] })
-    setIsZoomed(false)
-  }
+    plotRef.current.setScale('x', { min, max })
+    onViewChange(min, max)
+  }, [onViewChange])
+
+  const resetZoom = useCallback(() => {
+    panTo(fullMin, fullMax)
+  }, [panTo, fullMin, fullMax])
 
   if (visibleChannels.length === 0) {
     return (
-      <div
-        className="flex items-center justify-center h-full text-sm"
-        style={{ color: 'var(--text-muted)' }}
-      >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height, color: 'var(--text-muted)', fontSize: 13 }}>
         Select at least one channel below
       </div>
     )
   }
 
   return (
-    <div style={{ position: 'relative', width: '100%' }}>
+    <div style={{ position: 'relative', width: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* uPlot renders here */}
       <div ref={containerRef} style={{ width: '100%' }} />
+
+      {/* Timeline scrollbar */}
+      <TimelineScrollbar
+        fullMin={fullMin}
+        fullMax={fullMax}
+        viewMin={viewMin}
+        viewMax={viewMax}
+        onPan={panTo}
+      />
+
+      {/* Reset zoom badge */}
       {isZoomed && (
         <button
           onClick={resetZoom}
-          title="Reset zoom (double-click chart)"
+          title="Double-click chart to reset"
           style={{
             position: 'absolute',
             top: 8,
             right: 8,
             padding: '3px 10px',
-            borderRadius: 6,
+            borderRadius: 5,
             fontSize: 11,
-            fontWeight: 600,
-            background: 'rgba(124,110,247,0.18)',
-            border: '1px solid rgba(124,110,247,0.5)',
-            color: '#a78bfa',
+            fontWeight: 700,
+            letterSpacing: '0.06em',
+            background: 'rgba(229,0,10,0.15)',
+            border: '1px solid rgba(229,0,10,0.4)',
+            color: BRAND_RED,
             cursor: 'pointer',
-            backdropFilter: 'blur(4px)',
+            backdropFilter: 'blur(6px)',
             zIndex: 10
           }}
         >
@@ -146,6 +167,117 @@ export default function Chart({ logFile, height = 400 }: ChartProps) {
   )
 }
 
+// ─── Timeline scrollbar ──────────────────────────────────────────────────────
+
+interface ScrollbarProps {
+  fullMin: number
+  fullMax: number
+  viewMin: number
+  viewMax: number
+  onPan: (min: number, max: number) => void
+}
+
+function TimelineScrollbar({ fullMin, fullMax, viewMin, viewMax, onPan }: ScrollbarProps) {
+  const trackRef = useRef<HTMLDivElement>(null)
+
+  const fullRange = fullMax - fullMin
+  const viewRange = viewMax - viewMin
+  const thumbLeft = fullRange > 0 ? (viewMin - fullMin) / fullRange : 0
+  const thumbWidth = fullRange > 0 ? viewRange / fullRange : 1
+  const isFullView = thumbWidth >= 0.9999
+
+  const startDrag = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (isFullView) return
+
+    const startX = e.clientX
+    const startMin = viewMin
+    const startMax = viewMax
+
+    const onMove = (me: MouseEvent) => {
+      if (!trackRef.current) return
+      const trackW = trackRef.current.clientWidth
+      const delta = ((me.clientX - startX) / trackW) * fullRange
+      let newMin = startMin + delta
+      let newMax = startMax + delta
+      if (newMin < fullMin) { newMin = fullMin; newMax = fullMin + viewRange }
+      if (newMax > fullMax) { newMax = fullMax; newMin = fullMax - viewRange }
+      onPan(newMin, newMax)
+    }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+
+  const jumpTo = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!trackRef.current || isFullView) return
+    // Ignore clicks that originated on the thumb itself
+    if ((e.target as HTMLElement).dataset.thumb) return
+    const rect = trackRef.current.getBoundingClientRect()
+    const ratio = (e.clientX - rect.left) / rect.width
+    const center = fullMin + ratio * fullRange
+    const half = viewRange / 2
+    let newMin = center - half
+    let newMax = center + half
+    if (newMin < fullMin) { newMin = fullMin; newMax = fullMin + viewRange }
+    if (newMax > fullMax) { newMax = fullMax; newMin = fullMax - viewRange }
+    onPan(newMin, newMax)
+  }
+
+  return (
+    <div
+      ref={trackRef}
+      onClick={jumpTo}
+      style={{
+        position: 'relative',
+        height: 20,
+        marginTop: 2,
+        cursor: isFullView ? 'default' : 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        padding: '0 2px'
+      }}
+    >
+      {/* Rail */}
+      <div
+        style={{
+          position: 'absolute',
+          left: 2,
+          right: 2,
+          height: 3,
+          borderRadius: 2,
+          background: 'var(--border)'
+        }}
+      />
+
+      {/* Thumb */}
+      <div
+        data-thumb="1"
+        onMouseDown={startDrag}
+        style={{
+          position: 'absolute',
+          left: `calc(${thumbLeft * 100}% + 2px)`,
+          width: `calc(${thumbWidth * 100}% - 4px)`,
+          minWidth: 12,
+          height: isFullView ? 3 : 8,
+          borderRadius: 4,
+          background: isFullView ? 'var(--axis)' : BRAND_RED,
+          opacity: isFullView ? 0.35 : 0.9,
+          cursor: isFullView ? 'default' : 'grab',
+          transition: 'height 0.2s, opacity 0.2s, background 0.2s',
+          boxShadow: isFullView ? 'none' : `0 0 6px rgba(229,0,10,0.4)`
+        }}
+      />
+    </div>
+  )
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
 function getCSS(v: string) {
   return getComputedStyle(document.documentElement).getPropertyValue(v).trim() || '#333'
 }
@@ -153,28 +285,25 @@ function getCSS(v: string) {
 function wheelZoomPlugin(
   fullXMin: number,
   fullXMax: number,
-  onZoomChange: (zoomed: boolean) => void
+  onViewChange: (min: number, max: number) => void
 ): uPlot.Plugin {
-  const ZOOM_FACTOR = 0.75  // scroll up zooms to 75% of current range
+  const ZOOM_FACTOR = 0.75
   let isPanning = false
   let panStartClientX = 0
   let panStartMin = 0
   let panStartMax = 0
 
-  function clampScale(min: number, max: number): [number, number] {
+  function clamp(min: number, max: number): [number, number] {
     const range = max - min
     const fullRange = fullXMax - fullXMin
-    // Prevent zooming beyond the data or past a very small range
     if (range < fullRange * 0.0005) return [min, min + fullRange * 0.0005]
     if (min < fullXMin) return [fullXMin, Math.min(fullXMin + range, fullXMax)]
     if (max > fullXMax) return [Math.max(fullXMax - range, fullXMin), fullXMax]
     return [min, max]
   }
 
-  function isFullRange(u: uPlot): boolean {
-    const xMin = u.scales.x.min ?? fullXMin
-    const xMax = u.scales.x.max ?? fullXMax
-    return Math.abs(xMin - fullXMin) < 1e-9 && Math.abs(xMax - fullXMax) < 1e-9
+  function notify(u: uPlot) {
+    onViewChange(u.scales.x.min ?? fullXMin, u.scales.x.max ?? fullXMax)
   }
 
   return {
@@ -182,31 +311,21 @@ function wheelZoomPlugin(
       init(u) {
         const over = u.over
 
-        // ── Scroll wheel: zoom X axis centred on cursor ──
-        over.addEventListener(
-          'wheel',
-          (e) => {
-            e.preventDefault()
+        over.addEventListener('wheel', (e) => {
+          e.preventDefault()
+          const xMin = u.scales.x.min ?? fullXMin
+          const xMax = u.scales.x.max ?? fullXMax
+          const cursorLeft = u.cursor.left ?? (u.bbox.width / devicePixelRatio) / 2
+          const cursorVal = u.posToVal(cursorLeft, 'x')
+          const factor = e.deltaY < 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR
+          let [newMin, newMax] = clamp(
+            cursorVal - (cursorVal - xMin) * factor,
+            cursorVal + (xMax - cursorVal) * factor
+          )
+          u.setScale('x', { min: newMin, max: newMax })
+          notify(u)
+        }, { passive: false })
 
-            const xMin = u.scales.x.min ?? fullXMin
-            const xMax = u.scales.x.max ?? fullXMax
-
-            // Cursor position in data coordinates
-            const cursorLeft = u.cursor.left ?? (u.bbox.width / devicePixelRatio) / 2
-            const cursorVal = u.posToVal(cursorLeft, 'x')
-
-            const factor = e.deltaY < 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR
-            let newMin = cursorVal - (cursorVal - xMin) * factor
-            let newMax = cursorVal + (xMax - cursorVal) * factor
-            ;[newMin, newMax] = clampScale(newMin, newMax)
-
-            u.setScale('x', { min: newMin, max: newMax })
-            onZoomChange(!isFullRange(u))
-          },
-          { passive: false }
-        )
-
-        // ── Left-click drag: pan ──
         over.addEventListener('mousedown', (e) => {
           if (e.button !== 0) return
           isPanning = true
@@ -223,30 +342,25 @@ function wheelZoomPlugin(
           if (pxWidth === 0) return
           const valPerPx = range / pxWidth
           const delta = -(e.clientX - panStartClientX) * valPerPx
-          let [newMin, newMax] = clampScale(panStartMin + delta, panStartMax + delta)
-          // Keep range constant while panning
+          let [newMin, newMax] = clamp(panStartMin + delta, panStartMax + delta)
           const clampedRange = newMax - newMin
           if (Math.abs(clampedRange - range) > 1e-9) {
-            if (newMin === fullXMin) newMax = fullXMin + range
+            if (newMin <= fullXMin) newMax = fullXMin + range
             else newMin = fullXMax - range
           }
           u.setScale('x', { min: newMin, max: newMax })
-          onZoomChange(!isFullRange(u))
+          notify(u)
         })
 
         const stopPan = () => {
-          if (isPanning) {
-            isPanning = false
-            over.style.cursor = ''
-          }
+          if (isPanning) { isPanning = false; over.style.cursor = '' }
         }
         window.addEventListener('mouseup', stopPan)
         window.addEventListener('mouseleave', stopPan)
 
-        // ── Double-click: reset to full range ──
         over.addEventListener('dblclick', () => {
           u.setScale('x', { min: fullXMin, max: fullXMax })
-          onZoomChange(false)
+          notify(u)
         })
       }
     }
@@ -262,20 +376,17 @@ function tooltipPlugin(): uPlot.Plugin {
         tooltip = document.createElement('div')
         tooltip.style.cssText = `
           position:absolute; pointer-events:none; display:none;
-          background:rgba(15,17,23,0.92); border:1px solid rgba(255,255,255,0.1);
+          background:rgba(10,11,15,0.94); border:1px solid rgba(255,255,255,0.08);
           border-radius:8px; padding:8px 12px; font-size:12px;
-          color:#e2e8f0; z-index:100; backdrop-filter:blur(8px);
-          min-width:140px; box-shadow:0 8px 24px rgba(0,0,0,0.5);
+          color:#e8eaf0; z-index:100; backdrop-filter:blur(10px);
+          min-width:140px; box-shadow:0 8px 32px rgba(0,0,0,0.6);
         `
         u.root.appendChild(tooltip)
       },
       setCursor(u) {
         if (!tooltip) return
         const { left, top, idx } = u.cursor
-        if (idx == null || left == null || left < 0) {
-          tooltip.style.display = 'none'
-          return
-        }
+        if (idx == null || left == null || left < 0) { tooltip.style.display = 'none'; return }
 
         const lines: string[] = []
         for (let i = 1; i < u.series.length; i++) {
@@ -284,13 +395,13 @@ function tooltipPlugin(): uPlot.Plugin {
           const val = u.data[i][idx]
           if (val == null) continue
           const color = typeof s.stroke === 'string' ? s.stroke : '#fff'
-          lines.push(
-            `<div style="display:flex;align-items:center;gap:6px;margin:2px 0">
-              <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0"></span>
-              <span style="color:#94a3b8;flex:1">${s.label}</span>
-              <span style="font-weight:600">${typeof val === 'number' ? val.toFixed(3) : val}</span>
-            </div>`
-          )
+          lines.push(`
+            <div style="display:flex;align-items:center;gap:6px;margin:2px 0">
+              <span style="width:7px;height:7px;border-radius:50%;background:${color};flex-shrink:0"></span>
+              <span style="color:#4a5068;flex:1;font-size:11px">${s.label}</span>
+              <span style="font-weight:700;font-variant-numeric:tabular-nums">${typeof val === 'number' ? val.toFixed(3) : val}</span>
+            </div>
+          `)
         }
 
         if (!lines.length) { tooltip.style.display = 'none'; return }
@@ -302,13 +413,11 @@ function tooltipPlugin(): uPlot.Plugin {
         const th = tooltip.offsetHeight
         const uw = u.bbox.width / devicePixelRatio
         const uh = u.bbox.height / devicePixelRatio
-
         let tx = (left ?? 0) + 16
         let ty = (top ?? 0) - th / 2
         if (tx + tw > uw) tx = (left ?? 0) - tw - 16
         if (ty < 0) ty = 8
         if (ty + th > uh) ty = uh - th - 8
-
         tooltip.style.left = `${tx}px`
         tooltip.style.top = `${ty + u.bbox.top / devicePixelRatio}px`
       }

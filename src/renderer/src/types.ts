@@ -18,10 +18,13 @@ export interface LogFile {
 
 export type ViewMode = 'single' | 'split' | 'raw'
 
+export type PanelPosition = 'bottom' | 'top' | 'left' | 'right'
+
 export interface AppSettings {
   externalApp: string
   theme: ThemeName
   channelColors: string[]
+  channelListPosition: PanelPosition
 }
 
 export type ThemeName = 'dark' | 'midnight' | 'light' | 'nord' | 'solarized'

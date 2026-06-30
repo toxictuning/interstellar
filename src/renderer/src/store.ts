@@ -30,7 +30,8 @@ export const useStore = create<LogStore>()(
       settings: {
         externalApp: '',
         theme: 'dark',
-        channelColors: DEFAULT_CHANNEL_COLORS
+        channelColors: DEFAULT_CHANNEL_COLORS,
+        channelListPosition: 'bottom'
       },
       updateAvailable: null,
       updateDownloaded: false,
