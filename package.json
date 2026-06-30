@@ -1,0 +1,89 @@
+{
+  "name": "logview",
+  "version": "1.0.0",
+  "description": "Fast CSV data log viewer for automotive and engineering logs",
+  "main": "out/main/index.js",
+  "author": {
+    "name": "Toxic Tuning",
+    "email": "waynemodz@gmail.com"
+  },
+  "homepage": "https://github.com/toxictuning/logview",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/toxictuning/logview.git"
+  },
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "dist": "npm run build && electron-builder",
+    "dist:win": "npm run build && electron-builder --win",
+    "release": "npm run build && electron-builder --win --publish always"
+  },
+  "dependencies": {
+    "@electron-toolkit/utils": "^3.0.0",
+    "electron-updater": "^6.3.9",
+    "papaparse": "^5.4.1",
+    "uplot": "^1.6.31",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/papaparse": "^5.3.15",
+    "@types/react": "^18.3.17",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.21",
+    "electron": "^33.4.0",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "postcss": "^8.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.19"
+  },
+  "build": {
+    "appId": "com.toxictuning.logview",
+    "productName": "LogView",
+    "copyright": "Copyright © 2026 Toxic Tuning",
+    "publish": {
+      "provider": "github",
+      "owner": "toxictuning",
+      "repo": "logview"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "resources/icon.ico",
+      "fileAssociations": [
+        {
+          "ext": "csv",
+          "name": "CSV Log File",
+          "description": "Open with LogView",
+          "role": "Editor"
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "LogView"
+    },
+    "directories": {
+      "output": "dist",
+      "buildResources": "resources"
+    },
+    "files": [
+      "out/**/*"
+    ]
+  }
+}
