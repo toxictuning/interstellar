@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import { useEffect } from 'react'
 import { useStore } from './store'
 import { THEMES } from './themes'
 import { parseCSV } from './csvParser'
@@ -34,6 +34,17 @@ export default function App() {
   }, [theme])
 
   useEffect(() => {
+    const onDragOver = (e: DragEvent) => e.preventDefault()
+    const onDrop = (e: DragEvent) => {
+      e.preventDefault()
+      const file = e.dataTransfer?.files[0]
+      if (!file) return
+      const path = (file as File & { path: string }).path
+      if (path) openFilePath(path, setLogFile)
+    }
+    document.addEventListener('dragover', onDragOver)
+    document.addEventListener('drop', onDrop)
+
     const off1 = window.api.onOpenFile((path) => openFilePath(path, setLogFile))
     const off2 = window.api.onUpdateAvailable((info) =>
       setUpdateAvailable(info as { version: string })
@@ -46,28 +57,17 @@ export default function App() {
       setUpdateDownloaded(true)
       setUpdateProgress(null)
     })
-    return () => { off1(); off2(); off3(); off4() }
+    return () => {
+      document.removeEventListener('dragover', onDragOver)
+      document.removeEventListener('drop', onDrop)
+      off1(); off2(); off3(); off4()
+    }
   }, [])
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'copy'
-  }
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    const file = e.dataTransfer.files[0]
-    if (!file) return
-    const path = (file as File & { path: string }).path
-    if (path) openFilePath(path, setLogFile)
-  }
 
   return (
     <div
       className="flex flex-col h-screen"
       style={{ background: 'var(--bg)', color: 'var(--text)' }}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
     >
       <TitleBar />
       <UpdateBanner />
