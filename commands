@@ -1,0 +1,5 @@
+
+What	How
+Dev	npm run dev → live-reloading Electron window
+Build	npm run dist:win → produces dist/LogView Setup 1.0.0.exe
+Release	git tag v1.0.0 && git push origin v1.0.0 → GitHub Actions builds and publishes the installer automatically

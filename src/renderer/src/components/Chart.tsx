@@ -50,6 +50,17 @@ const Chart = React.forwardRef<ChartHandle, ChartProps>(function Chart(
       ctx.fillRect(0, 0, out.width, out.height)
       ctx.drawImage(srcCanvas, 0, 0)
 
+      // Watermark — bottom-right, scales with DPR so it's crisp on HiDPI screens
+      const dpr = window.devicePixelRatio || 1
+      const pad = Math.round(12 * dpr)
+      ctx.save()
+      ctx.font = `700 ${Math.round(10 * dpr)}px Inter, system-ui, sans-serif`
+      ctx.textAlign = 'right'
+      ctx.textBaseline = 'bottom'
+      ctx.fillStyle = 'rgba(229,0,10,0.50)'
+      ctx.fillText('LogView · Toxic Tuning', out.width - pad, out.height - pad)
+      ctx.restore()
+
       const link = document.createElement('a')
       link.download = filename
       link.href = out.toDataURL('image/png')
@@ -176,10 +187,11 @@ const Chart = React.forwardRef<ChartHandle, ChartProps>(function Chart(
             padding: '3px 10px', borderRadius: 5, fontSize: 11, fontWeight: 700,
             letterSpacing: '0.06em', background: 'rgba(229,0,10,0.15)',
             border: '1px solid rgba(229,0,10,0.4)', color: BRAND_RED,
-            cursor: 'pointer', backdropFilter: 'blur(6px)', zIndex: 10
+            cursor: 'pointer', backdropFilter: 'blur(6px)', zIndex: 10,
+            display: 'flex', alignItems: 'center', gap: 5
           }}
         >
-          Reset Zoom
+          ↺ Reset
         </button>
       )}
     </div>
@@ -364,11 +376,15 @@ function wheelZoomPlugin(
   onViewChange: (min: number, max: number) => void
 ): uPlot.Plugin {
   const ZOOM_FACTOR = 0.75
-  let isPanning = false, panStartClientX = 0, panStartMin = 0, panStartMax = 0
+  let selEl: HTMLDivElement | null = null
+  let selStartPx: number | null = null
 
   function clamp(min: number, max: number): [number, number] {
     const range = max - min, fullRange = fullXMax - fullXMin
-    if (range < fullRange * 0.0005) return [min, min + fullRange * 0.0005]
+    if (range < fullRange * 0.0005) {
+      const mid = (min + max) / 2
+      return [mid - fullRange * 0.00025, mid + fullRange * 0.00025]
+    }
     if (min < fullXMin) return [fullXMin, Math.min(fullXMin + range, fullXMax)]
     if (max > fullXMax) return [Math.max(fullXMax - range, fullXMin), fullXMax]
     return [min, max]
@@ -383,43 +399,77 @@ function wheelZoomPlugin(
       init(u) {
         const over = u.over
 
+        // Rubber-band selection overlay
+        selEl = document.createElement('div')
+        selEl.style.cssText = [
+          'position:absolute', 'top:0', 'bottom:0',
+          'pointer-events:none', 'display:none',
+          'background:rgba(229,0,10,0.10)',
+          'border:1.5px solid rgba(229,0,10,0.65)',
+          'border-radius:2px', 'box-sizing:border-box'
+        ].join(';')
+        over.appendChild(selEl)
+
+        // Scroll wheel = zoom centered on cursor
         over.addEventListener('wheel', (e) => {
           e.preventDefault()
           const xMin = u.scales.x.min ?? fullXMin, xMax = u.scales.x.max ?? fullXMax
           const cursorLeft = u.cursor.left ?? (u.bbox.width / devicePixelRatio) / 2
           const cursorVal  = u.posToVal(cursorLeft, 'x')
           const factor = e.deltaY < 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR
-          const [newMin, newMax] = clamp(cursorVal - (cursorVal - xMin) * factor, cursorVal + (xMax - cursorVal) * factor)
+          const [newMin, newMax] = clamp(
+            cursorVal - (cursorVal - xMin) * factor,
+            cursorVal + (xMax - cursorVal) * factor
+          )
           u.setScale('x', { min: newMin, max: newMax })
           notify(u)
         }, { passive: false })
 
+        // Left-drag = rubber-band select to zoom
         over.addEventListener('mousedown', (e) => {
           if (e.button !== 0) return
-          isPanning = true; panStartClientX = e.clientX
-          panStartMin = u.scales.x.min ?? fullXMin; panStartMax = u.scales.x.max ?? fullXMax
-          over.style.cursor = 'grabbing'
+          e.preventDefault()
+          const rect = over.getBoundingClientRect()
+          selStartPx = e.clientX - rect.left
+          if (selEl) {
+            selEl.style.left  = `${selStartPx}px`
+            selEl.style.width = '0'
+            selEl.style.display = 'block'
+          }
+          over.style.cursor = 'crosshair'
         })
 
         window.addEventListener('mousemove', (e) => {
-          if (!isPanning) return
-          const range = panStartMax - panStartMin
-          const pxWidth = u.bbox.width / devicePixelRatio
-          if (pxWidth === 0) return
-          const delta = -(e.clientX - panStartClientX) * (range / pxWidth)
-          let [newMin, newMax] = clamp(panStartMin + delta, panStartMax + delta)
-          if (Math.abs((newMax - newMin) - range) > 1e-9) {
-            if (newMin <= fullXMin) newMax = fullXMin + range
-            else newMin = fullXMax - range
-          }
-          u.setScale('x', { min: newMin, max: newMax })
-          notify(u)
+          if (selStartPx === null || !selEl) return
+          const rect = over.getBoundingClientRect()
+          const curPx = Math.max(0, Math.min(rect.width, e.clientX - rect.left))
+          const minPx = Math.min(selStartPx, curPx)
+          const maxPx = Math.max(selStartPx, curPx)
+          selEl.style.left  = `${minPx}px`
+          selEl.style.width = `${maxPx - minPx}px`
         })
 
-        const stopPan = () => { if (isPanning) { isPanning = false; over.style.cursor = '' } }
-        window.addEventListener('mouseup', stopPan)
-        window.addEventListener('mouseleave', stopPan)
+        window.addEventListener('mouseup', (e) => {
+          if (selStartPx === null || !selEl) return
+          selEl.style.display = 'none'
+          over.style.cursor = ''
 
+          const rect = over.getBoundingClientRect()
+          const endPx = Math.max(0, Math.min(rect.width, e.clientX - rect.left))
+          const dragPx = Math.abs(endPx - selStartPx)
+
+          if (dragPx > 8) {
+            const x1 = Math.min(selStartPx, endPx)
+            const x2 = Math.max(selStartPx, endPx)
+            const [newMin, newMax] = clamp(u.posToVal(x1, 'x'), u.posToVal(x2, 'x'))
+            u.setScale('x', { min: newMin, max: newMax })
+            notify(u)
+          }
+
+          selStartPx = null
+        })
+
+        // Double-click = reset to full view
         over.addEventListener('dblclick', () => {
           u.setScale('x', { min: fullXMin, max: fullXMax })
           notify(u)

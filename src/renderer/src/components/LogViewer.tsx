@@ -4,12 +4,14 @@ import { parseCSV } from '../csvParser'
 import Chart, { type ChartHandle } from './Chart'
 import ChannelList from './ChannelList'
 import SettingsPanel from './SettingsPanel'
+import AboutDialog from './AboutDialog'
 import { BRAND_RED } from '../themes'
 import type { ViewMode, PanelPosition } from '../types'
 
 export default function LogViewer() {
   const { logFile, viewMode, setViewMode, setLogFile, settings } = useStore()
   const [showSettings, setShowSettings] = useState(false)
+  const [showAbout, setShowAbout] = useState(false)
   const pos = settings.channelListPosition
   const isVertical = pos === 'left' || pos === 'right'
 
@@ -106,6 +108,18 @@ export default function LogViewer() {
         </div>
 
         <button
+          onClick={() => setShowAbout(true)}
+          style={{
+            width: 28, height: 28, display: 'flex', alignItems: 'center',
+            justifyContent: 'center', borderRadius: '50%', border: '1px solid var(--border)',
+            background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer',
+            fontSize: 11, fontWeight: 700, letterSpacing: 0
+          }}
+          title="About LogView"
+        >
+          i
+        </button>
+        <button
           onClick={() => setShowSettings(true)}
           style={{
             width: 32, height: 32, display: 'flex', alignItems: 'center',
@@ -135,6 +149,7 @@ export default function LogViewer() {
       </div>
 
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
+      {showAbout    && <AboutDialog   onClose={() => setShowAbout(false)} />}
     </div>
   )
 }

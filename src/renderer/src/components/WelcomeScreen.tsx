@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import { useStore } from '../store'
 import { parseCSV } from '../csvParser'
 import SettingsPanel from './SettingsPanel'
+import AboutDialog from './AboutDialog'
 import logoSrc from '../assets/logo.png'
 import { BRAND_RED, BRAND_RED_DIM, BRAND_RED_GLOW } from '../themes'
 
@@ -9,6 +10,7 @@ export default function WelcomeScreen() {
   const { settings, setLogFile } = useStore()
   const [dragging, setDragging] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showAbout, setShowAbout] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loadingView, setLoadingView] = useState(false)
 
@@ -230,23 +232,24 @@ export default function WelcomeScreen() {
           <span style={{ fontSize: 11, color: 'var(--text-muted)', opacity: 0.5 }}>
             or drag & drop a CSV
           </span>
-          <button
-            onClick={() => setShowSettings(true)}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--text-muted)',
-              fontSize: 11,
-              cursor: 'pointer',
-              opacity: 0.5,
-              letterSpacing: '0.06em',
-              transition: 'opacity 0.15s'
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.opacity = '1' }}
-            onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.5' }}
-          >
-            Settings
-          </button>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <button
+              onClick={() => setShowAbout(true)}
+              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer', opacity: 0.4, letterSpacing: '0.06em', transition: 'opacity 0.15s' }}
+              onMouseEnter={(e) => { e.currentTarget.style.opacity = '1' }}
+              onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.4' }}
+            >
+              About
+            </button>
+            <button
+              onClick={() => setShowSettings(true)}
+              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer', opacity: 0.5, letterSpacing: '0.06em', transition: 'opacity 0.15s' }}
+              onMouseEnter={(e) => { e.currentTarget.style.opacity = '1' }}
+              onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.5' }}
+            >
+              Settings
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -267,6 +270,7 @@ export default function WelcomeScreen() {
       </div>
 
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
+      {showAbout    && <AboutDialog   onClose={() => setShowAbout(false)} />}
     </div>
   )
 }
