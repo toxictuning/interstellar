@@ -7,10 +7,10 @@
     "name": "Toxic Tuning",
     "email": "waynemodz@gmail.com"
   },
-  "homepage": "https://github.com/toxictuning/logview",
+  "homepage": "https://github.com/toxictuning/interstellar",
   "repository": {
     "type": "git",
-    "url": "https://github.com/toxictuning/logview.git"
+    "url": "https://github.com/toxictuning/interstellar.git"
   },
   "license": "MIT",
   "scripts": {
@@ -52,7 +52,7 @@
     "publish": {
       "provider": "github",
       "owner": "toxictuning",
-      "repo": "logview"
+      "repo": "interstellar"
     },
     "win": {
       "target": [
