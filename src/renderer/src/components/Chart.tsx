@@ -13,20 +13,29 @@ export interface ChartHandle {
 interface ChartProps {
   logFile: LogFile
   height?: number
-  smoothing?: number  // half-window radius in samples (0 = raw)
+  smoothing?: number            // half-window radius in samples (0 = raw)
+  yAxisChannel?: string | null  // channel name whose range locks the Y scale
+  xAxisChannel?: string | null  // channel name used as the X axis (XY plot mode)
 }
 
 const Chart = React.forwardRef<ChartHandle, ChartProps>(function Chart(
-  { logFile, height = 400, smoothing = 0 },
+  { logFile, height = 400, smoothing = 0, yAxisChannel = null, xAxisChannel = null },
   ref
 ) {
   const theme        = useStore((s) => s.settings.theme)
+  const fontSize     = useStore((s) => s.settings.fontSize ?? 'normal')
   const containerRef = useRef<HTMLDivElement>(null)
   const plotRef      = useRef<uPlot | null>(null)
   const logoImgRef   = useRef<HTMLImageElement | null>(null)
-  // Persist the zoom window across rebuilds (smoothing/theme changes should not reset zoom)
   const zoomMinRef   = useRef<number | null>(null)
   const zoomMaxRef   = useRef<number | null>(null)
+  const prevXAxisRef = useRef<string | null>(null)
+  // Ref so the data-update effect can always read the current smoothing and
+  // xAxisChannel without those values being stale-closed over.
+  const smoothingRef    = useRef(smoothing)
+  const xAxisChannelRef = useRef(xAxisChannel)
+  smoothingRef.current    = smoothing
+  xAxisChannelRef.current = xAxisChannel
 
   // Pre-load the logo once so exportPng can draw it synchronously
   useEffect(() => {
@@ -35,8 +44,9 @@ const Chart = React.forwardRef<ChartHandle, ChartProps>(function Chart(
     img.src = logoSrc
   }, [])
 
-  const fullMin = logFile.timestamps[0]
-  const fullMax = logFile.timestamps[logFile.timestamps.length - 1]
+  const xCh    = xAxisChannel ? logFile.channels.find((c) => c.name === xAxisChannel) ?? null : null
+  const fullMin = xCh ? xCh.min : logFile.timestamps[0]
+  const fullMax = xCh ? xCh.max : logFile.timestamps[logFile.timestamps.length - 1]
 
   const [viewMin, setViewMin] = useState(fullMin)
   const [viewMax, setViewMax] = useState(fullMax)
@@ -141,70 +151,98 @@ const Chart = React.forwardRef<ChartHandle, ChartProps>(function Chart(
     }
   }), [])
 
+  // ── Chart BUILD effect ───────────────────────────────────────────────────
+  // Only runs on structural changes that require a new uPlot instance:
+  // new file, height, axis pins, font size.  Smoothing and channel
+  // visibility are handled by the DATA UPDATE effect below — no rebuild,
+  // no zoom reset.
   useEffect(() => {
-    if (!containerRef.current) return
-    if (visibleChannels.length === 0) return
+    if (!containerRef.current || logFile.channels.length === 0) return
 
     plotRef.current?.destroy()
     plotRef.current = null
 
-    const el = containerRef.current
-    const w = el.clientWidth || 800
-    const chartH = height - 24  // reserve 24px for the scrollbar
+    const el  = containerRef.current
+    const w   = el.clientWidth || 800
+    const chartH = height - 24
+
+    // Clear zoom when the X axis channel changes (stale time-zoom shouldn't
+    // bleed into an XY-plot scale).
+    const xAxisKey = xAxisChannelRef.current ?? null
+    if (prevXAxisRef.current !== xAxisKey) {
+      zoomMinRef.current = null
+      zoomMaxRef.current = null
+      prevXAxisRef.current = xAxisKey
+    }
+
+    const allChannels = logFile.channels
+    const sm = smoothingRef.current
+    const xChLocal = xAxisChannelRef.current
+      ? allChannels.find((c) => c.name === xAxisChannelRef.current) ?? null
+      : null
+
+    // Build data for ALL channels (visible + hidden) so later setData calls
+    // never need to change the number of series — only their data values.
+    let xData: Float64Array
+    let yDataArrays: Float64Array[]
+    if (xChLocal) {
+      const n = xChLocal.data.length
+      const indices = Array.from({ length: n }, (_, i) => i)
+      indices.sort((a, b) => xChLocal.data[a] - xChLocal.data[b])
+      xData = new Float64Array(indices.map((i) => xChLocal.data[i]))
+      yDataArrays = allChannels.map((ch) => {
+        const smoothed = movingAvg(ch.data, sm)
+        return new Float64Array(indices.map((i) => smoothed[i]))
+      })
+    } else {
+      xData = new Float64Array(logFile.timestamps)
+      yDataArrays = allChannels.map((ch) => new Float64Array(movingAvg(ch.data, sm)))
+    }
 
     const series: uPlot.Series[] = [
-      { label: 'Time' },
-      ...visibleChannels.map((ch) => ({
+      { label: xChLocal ? (xChLocal.unit ? `${xChLocal.name} (${xChLocal.unit})` : xChLocal.name) : 'Time' },
+      ...allChannels.map((ch) => ({
         label: ch.unit ? `${ch.name} (${ch.unit})` : ch.name,
         stroke: ch.color,
         width: 1.5,
-        spanGaps: true
+        spanGaps: true,
+        show: ch.visible
       }))
     ]
 
-    const data: uPlot.AlignedData = [
-      new Float64Array(logFile.timestamps),
-      ...visibleChannels.map((ch) => new Float64Array(movingAvg(ch.data, smoothing)))
-    ]
+    const data: uPlot.AlignedData = [xData, ...yDataArrays]
 
-    // Stroke functions are called by uPlot on every redraw so they always
-    // read the current CSS variables — this is what keeps grid/axis colours
-    // in sync when the theme changes without rebuilding the chart.
     const axisStroke = () => getCSS('--axis')
     const gridStroke = () => getCSS('--grid')
+    const xAxisStroke = xChLocal ? () => xChLocal.color : axisStroke
+    const xAxisLabel  = xChLocal ? (xChLocal.unit || xChLocal.name) : ''
+
+    const pinnedCh = yAxisChannel
+      ? logFile.channels.find((c) => c.name === yAxisChannel)
+      : null
+    const yScale: uPlot.Scale = pinnedCh
+      ? { auto: false, min: pinnedCh.min, max: pinnedCh.max }
+      : { auto: true }
+    const yAxisStroke = pinnedCh ? () => pinnedCh.color : axisStroke
+
+    const axisFontPx = fontSize === 'small' ? 9 : fontSize === 'large' ? 13 : 11
+    const axisFont = `${axisFontPx}px Inter, sans-serif`
 
     const opts: uPlot.Options = {
       width: w,
       height: chartH,
       class: 'interstellar-chart',
-      cursor: {
-        sync: { key: 'interstellar' },
-        drag: { x: false, y: false }
-      },
+      cursor: { sync: { key: 'interstellar' }, drag: { x: false, y: false } },
       select: { show: false, left: 0, top: 0, width: 0, height: 0 },
       legend: { show: false },
-      scales: { x: { time: false }, y: { auto: true } },
+      scales: { x: { time: false }, y: yScale },
       axes: [
-        {
-          stroke: axisStroke,
-          grid: { stroke: gridStroke, width: 1 },
-          ticks: { stroke: axisStroke },
-          font: '11px Inter, sans-serif',
-          labelFont: '11px Inter, sans-serif'
-        },
-        {
-          stroke: axisStroke,
-          grid: { stroke: gridStroke, width: 1 },
-          ticks: { stroke: axisStroke },
-          font: '11px Inter, sans-serif',
-          labelFont: '11px Inter, sans-serif',
-          size: 70
-        }
+        { stroke: xAxisStroke, grid: { stroke: gridStroke, width: 1 }, ticks: { stroke: xAxisStroke }, label: xAxisLabel, font: axisFont, labelFont: axisFont },
+        { stroke: yAxisStroke, grid: { stroke: gridStroke, width: 1 }, ticks: { stroke: yAxisStroke }, label: pinnedCh?.unit || '', font: axisFont, labelFont: axisFont, size: 70 }
       ],
       series,
       plugins: [
-        // Pass the actual channel objects so tooltip uses the exact same color values
-        tooltipPlugin(visibleChannels),
+        tooltipPlugin(allChannels),
         wheelZoomPlugin(fullMin, fullMax, onViewChange)
       ]
     }
@@ -212,10 +250,6 @@ const Chart = React.forwardRef<ChartHandle, ChartProps>(function Chart(
     const u = new uPlot(opts, data, el)
     plotRef.current = u
 
-    // Restore previous zoom if the x-range overlaps the new data.
-    // This preserves zoom when smoothing/theme change triggers a rebuild.
-    // When a new file is loaded (different timestamps), the saved zoom
-    // falls outside the new range and is silently discarded.
     const savedMin = zoomMinRef.current
     const savedMax = zoomMaxRef.current
     if (savedMin !== null && savedMax !== null) {
@@ -248,7 +282,46 @@ const Chart = React.forwardRef<ChartHandle, ChartProps>(function Chart(
       plotRef.current?.destroy()
       plotRef.current = null
     }
-  }, [logFile, visibleChannels.map((c) => c.name + c.color).join(), height, smoothing])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [logFile.path, height, yAxisChannel, xAxisChannel, fontSize])
+
+  // ── Data UPDATE effect ────────────────────────────────────────────────────
+  // Runs when smoothing or channel visibility/color changes.
+  // Uses setData + setSeries on the existing uPlot instance — no rebuild,
+  // so the zoom window is always preserved.
+  useEffect(() => {
+    const u = plotRef.current
+    if (!u) return
+
+    const allChannels = logFile.channels
+    const sm = smoothing
+    const xChLocal = xAxisChannel
+      ? allChannels.find((c) => c.name === xAxisChannel) ?? null
+      : null
+
+    let newData: uPlot.AlignedData
+    if (xChLocal) {
+      const n = xChLocal.data.length
+      const indices = Array.from({ length: n }, (_, i) => i)
+      indices.sort((a, b) => xChLocal.data[a] - xChLocal.data[b])
+      newData = [
+        new Float64Array(indices.map((i) => xChLocal.data[i])),
+        ...allChannels.map((ch) => {
+          const smoothed = movingAvg(ch.data, sm)
+          return new Float64Array(indices.map((i) => smoothed[i]))
+        })
+      ]
+    } else {
+      newData = [
+        new Float64Array(logFile.timestamps),
+        ...allChannels.map((ch) => new Float64Array(movingAvg(ch.data, sm)))
+      ]
+    }
+
+    u.setData(newData, false)
+    allChannels.forEach((ch, i) => u.setSeries(i + 1, { show: ch.visible }))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [smoothing, logFile.channels.map((c) => c.name + String(c.visible) + c.color).join()])
 
   // Theme changes: stroke functions already read CSS on every draw;
   // force one immediate redraw so colours update without waiting for
@@ -267,17 +340,14 @@ const Chart = React.forwardRef<ChartHandle, ChartProps>(function Chart(
     panTo(fullMin, fullMax)
   }, [panTo, fullMin, fullMax])
 
-  if (visibleChannels.length === 0) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height, color: 'var(--text-muted)', fontSize: 13 }}>
-        Select at least one channel
-      </div>
-    )
-  }
-
   return (
     <div style={{ position: 'relative', width: '100%', display: 'flex', flexDirection: 'column' }}>
       <div ref={containerRef} style={{ width: '100%' }} />
+      {visibleChannels.length === 0 && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13, pointerEvents: 'none' }}>
+          Select at least one channel
+        </div>
+      )}
 
       <TimelineScrollbar
         fullMin={fullMin}
@@ -419,10 +489,9 @@ function tooltipPlugin(channels: LogChannel[]): uPlot.Plugin {
         const lines: string[] = []
         for (let i = 1; i < u.series.length; i++) {
           const s  = u.series[i]
-          if (!s.show) continue
+          if (!s.show) continue  // skip channels hidden via setSeries
           const val = u.data[i][idx]
           if (val == null) continue
-          // Use the channel's color directly — avoids any uPlot internal processing
           const color = channels[i - 1]?.color ?? '#fff'
           lines.push(`
             <div style="display:flex;align-items:center;gap:7px;margin:2px 0">

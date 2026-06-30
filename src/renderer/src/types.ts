@@ -20,11 +20,14 @@ export type ViewMode = 'single' | 'split' | 'raw'
 
 export type PanelPosition = 'bottom' | 'top' | 'left' | 'right'
 
+export type FontSize = 'small' | 'normal' | 'large'
+
 export interface AppSettings {
   externalApp: string
   theme: ThemeName
   channelColors: string[]
   channelListPosition: PanelPosition
+  fontSize: FontSize
 }
 
 export type ThemeName = 'dark' | 'midnight' | 'light' | 'nord' | 'solarized'

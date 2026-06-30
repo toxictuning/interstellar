@@ -1,6 +1,13 @@
 import { useEffect } from 'react'
 import { useStore } from './store'
 import { THEMES } from './themes'
+import type { FontSize } from './types'
+
+const FONT_VARS: Record<FontSize, Record<string, string>> = {
+  small:  { '--ui-fs': '10px', '--ui-fs-sm': '9px',  '--ui-fs-xs': '8px',  '--chart-axis-fs': '9px'  },
+  normal: { '--ui-fs': '11px', '--ui-fs-sm': '10px', '--ui-fs-xs': '9px',  '--chart-axis-fs': '11px' },
+  large:  { '--ui-fs': '13px', '--ui-fs-sm': '12px', '--ui-fs-xs': '11px', '--chart-axis-fs': '13px' },
+}
 import { parseCSV } from './csvParser'
 import WelcomeScreen from './components/WelcomeScreen'
 import LogViewer from './components/LogViewer'
@@ -32,6 +39,12 @@ export default function App() {
     style.setProperty('--axis', theme.axisColor)
     document.body.style.background = theme.bg
   }, [theme])
+
+  useEffect(() => {
+    const style = document.documentElement.style
+    const vars = FONT_VARS[settings.fontSize ?? 'normal']
+    Object.entries(vars).forEach(([k, v]) => style.setProperty(k, v))
+  }, [settings.fontSize])
 
   useEffect(() => {
     const onDragOver = (e: DragEvent) => e.preventDefault()
