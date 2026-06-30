@@ -73,7 +73,7 @@ app.on('will-finish-launching', () => {
 })
 
 app.whenReady().then(() => {
-  electronApp.setAppUserModelId('com.toxictuning.interstellar')
+  electronApp.setAppUserModelId('com.protune.analyzer')
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)

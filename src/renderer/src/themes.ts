@@ -1,9 +1,9 @@
 import type { Theme, ThemeName } from './types'
 
-// Toxic Tuning brand red
-export const BRAND_RED = '#E5000A'
-export const BRAND_RED_DIM = 'rgba(229,0,10,0.15)'
-export const BRAND_RED_GLOW = 'rgba(229,0,10,0.35)'
+// ProTune brand teal
+export const BRAND_RED = '#1B9090'
+export const BRAND_RED_DIM = 'rgba(27,144,144,0.15)'
+export const BRAND_RED_GLOW = 'rgba(27,144,144,0.35)'
 
 export const THEMES: Record<ThemeName, Theme> = {
   dark: {
@@ -74,7 +74,7 @@ export const THEMES: Record<ThemeName, Theme> = {
 }
 
 export const DEFAULT_CHANNEL_COLORS = [
-  '#E5000A', '#00c8ff', '#a78bfa', '#10d980', '#f59e0b',
+  '#1B9090', '#00c8ff', '#a78bfa', '#10d980', '#f59e0b',
   '#f97316', '#ec4899', '#3b82f6', '#22c55e', '#d946ef',
   '#06b6d4', '#ef4444', '#84cc16', '#8b5cf6', '#14b8a6',
   '#fb7185', '#6366f1', '#4ade80', '#fbbf24', '#38bdf8'
