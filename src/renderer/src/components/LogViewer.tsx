@@ -115,7 +115,7 @@ export default function LogViewer() {
             background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer',
             fontSize: 11, fontWeight: 700, letterSpacing: 0
           }}
-          title="About LogView"
+          title="About Interstellar"
         >
           i
         </button>

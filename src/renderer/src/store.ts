@@ -70,7 +70,7 @@ export const useStore = create<LogStore>()(
       setUpdateProgress: (p) => set({ updateProgress: p })
     }),
     {
-      name: 'logview-settings',
+      name: 'interstellar-settings',
       partialize: (s) => ({ settings: s.settings })
     }
   )

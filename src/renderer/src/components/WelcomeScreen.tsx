@@ -151,7 +151,7 @@ export default function WelcomeScreen() {
               color: 'var(--text-muted)'
             }}
           >
-            LogView
+            Interstellar
           </span>
           <div style={{ height: 1, width: 32, background: 'var(--border)' }} />
         </div>

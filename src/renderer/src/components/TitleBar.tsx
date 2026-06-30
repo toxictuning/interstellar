@@ -64,7 +64,7 @@ export default function TitleBar() {
               lineHeight: 1
             }}
           >
-            LogView
+            Interstellar
           </span>
 
           {/* File name */}

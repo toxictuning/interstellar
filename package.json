@@ -1,5 +1,5 @@
 {
-  "name": "logview",
+  "name": "interstellar",
   "version": "1.0.0",
   "description": "Fast CSV data log viewer for automotive and engineering logs",
   "main": "out/main/index.js",
@@ -46,8 +46,8 @@
     "vite": "^5.4.19"
   },
   "build": {
-    "appId": "com.toxictuning.logview",
-    "productName": "LogView",
+    "appId": "com.toxictuning.interstellar",
+    "productName": "Interstellar",
     "copyright": "Copyright © 2026 Toxic Tuning",
     "publish": {
       "provider": "github",
@@ -66,7 +66,7 @@
         {
           "ext": "csv",
           "name": "CSV Log File",
-          "description": "Open with LogView",
+          "description": "Open with Interstellar",
           "role": "Editor"
         }
       ]
@@ -76,7 +76,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "LogView"
+      "shortcutName": "Interstellar"
     },
     "directories": {
       "output": "dist",

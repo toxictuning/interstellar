@@ -46,7 +46,7 @@ export default function AboutDialog({ onClose }: { onClose: () => void }) {
 
           {/* App name */}
           <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text)' }}>
-            LogView
+            Interstellar
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3, marginBottom: 22, opacity: 0.6 }}>
             Version {version}

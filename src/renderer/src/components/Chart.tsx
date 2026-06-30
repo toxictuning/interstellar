@@ -165,9 +165,9 @@ const Chart = React.forwardRef<ChartHandle, ChartProps>(function Chart(
     const opts: uPlot.Options = {
       width: w,
       height: chartH,
-      class: 'logview-chart',
+      class: 'interstellar-chart',
       cursor: {
-        sync: { key: 'logview' },
+        sync: { key: 'interstellar' },
         drag: { x: false, y: false }
       },
       select: { show: false, left: 0, top: 0, width: 0, height: 0 },

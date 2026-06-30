@@ -56,7 +56,7 @@ app.on('will-finish-launching', () => {
 })
 
 app.whenReady().then(() => {
-  electronApp.setAppUserModelId('com.toxictuning.logview')
+  electronApp.setAppUserModelId('com.toxictuning.interstellar')
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
