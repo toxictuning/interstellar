@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import React, { useEffect } from 'react'
 import { useStore } from './store'
 import { THEMES } from './themes'
 import { parseCSV } from './csvParser'
@@ -6,6 +6,14 @@ import WelcomeScreen from './components/WelcomeScreen'
 import LogViewer from './components/LogViewer'
 import TitleBar from './components/TitleBar'
 import UpdateBanner from './components/UpdateBanner'
+
+async function openFilePath(path: string, setLogFile: (f: ReturnType<typeof parseCSV>) => void) {
+  const res = await window.api.readFile(path)
+  if (res.ok && res.content) {
+    const parsed = parseCSV(res.content, path)
+    if (parsed) setLogFile(parsed)
+  }
+}
 
 export default function App() {
   const { logFile, settings, setLogFile, setUpdateAvailable, setUpdateDownloaded, setUpdateProgress } = useStore()
@@ -26,13 +34,7 @@ export default function App() {
   }, [theme])
 
   useEffect(() => {
-    const off1 = window.api.onOpenFile(async (path) => {
-      const res = await window.api.readFile(path)
-      if (res.ok && res.content) {
-        const parsed = parseCSV(res.content, path)
-        if (parsed) setLogFile(parsed)
-      }
-    })
+    const off1 = window.api.onOpenFile((path) => openFilePath(path, setLogFile))
     const off2 = window.api.onUpdateAvailable((info) =>
       setUpdateAvailable(info as { version: string })
     )
@@ -47,8 +49,26 @@ export default function App() {
     return () => { off1(); off2(); off3(); off4() }
   }, [])
 
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    const file = e.dataTransfer.files[0]
+    if (!file) return
+    const path = (file as File & { path: string }).path
+    if (path) openFilePath(path, setLogFile)
+  }
+
   return (
-    <div className="flex flex-col h-screen" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
+    <div
+      className="flex flex-col h-screen"
+      style={{ background: 'var(--bg)', color: 'var(--text)' }}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
       <TitleBar />
       <UpdateBanner />
       <div className="flex-1 overflow-hidden">
