@@ -1,6 +1,7 @@
 import Papa from 'papaparse'
 import type { LogFile, LogChannel } from './types'
 import { DEFAULT_CHANNEL_COLORS } from './themes'
+import { isVCDS, parseVCDS } from './vcdsParser'
 
 const TIME_KEYS = ['time', 'timestamp', 'time (s)', 'time(s)', 'ms', 'elapsed']
 
@@ -20,6 +21,11 @@ function parseUnit(header: string): { name: string; unit: string } {
 }
 
 export function parseCSV(content: string, filePath: string): LogFile | null {
+  // VCDS files have a non-standard multi-timestamp structure — delegate to the dedicated parser
+  if (isVCDS(content)) {
+    return parseVCDS(content, filePath)
+  }
+
   const result = Papa.parse<string[]>(content, {
     skipEmptyLines: true,
     dynamicTyping: false
