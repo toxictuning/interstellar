@@ -6,6 +6,23 @@ import { setupUpdater } from './updater'
 let mainWindow: BrowserWindow | null = null
 let pendingFilePath: string | null = null
 
+// Single-instance lock: if a second instance is launched (e.g. opening a
+// CSV from email while the app is already running), quit the second instance
+// and forward the file path to the first instance instead.
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) {
+  app.quit()
+  process.exit(0)
+}
+
+app.on('second-instance', (_event, argv) => {
+  if (!mainWindow) return
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.focus()
+  const file = argv.slice(1).find((a) => a.endsWith('.csv'))
+  if (file) mainWindow.webContents.send('open-file', file)
+})
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1280,
