@@ -1,20 +1,32 @@
 import { useState, useRef, useEffect } from 'react'
 import { useStore } from '../store'
 import { parseCSV } from '../csvParser'
-import Chart from './Chart'
+import Chart, { type ChartHandle } from './Chart'
 import ChannelList from './ChannelList'
 import SettingsPanel from './SettingsPanel'
 import { BRAND_RED } from '../themes'
-import type { ViewMode } from '../types'
+import type { ViewMode, PanelPosition } from '../types'
 
 export default function LogViewer() {
   const { logFile, viewMode, setViewMode, setLogFile, settings } = useStore()
   const [showSettings, setShowSettings] = useState(false)
+  const pos = settings.channelListPosition
+  const isVertical = pos === 'left' || pos === 'right'
+
+  // Panel size — separate defaults for vertical vs horizontal
+  const [panelSize, setPanelSize] = useState(220)
+  const prevPos = useRef<PanelPosition>(pos)
+  useEffect(() => {
+    if (prevPos.current !== pos) {
+      prevPos.current = pos
+      setPanelSize(isVertical ? 220 : 130)
+    }
+  }, [pos, isVertical])
+
+  // Chart ref for PNG export
+  const chartRef = useRef<ChartHandle>(null)
 
   if (!logFile) return null
-
-  const pos = settings.channelListPosition
-  const isVerticalPanel = pos === 'left' || pos === 'right'
 
   const openNew = async () => {
     const path = await window.api.openFileDialog()
@@ -26,31 +38,47 @@ export default function LogViewer() {
     }
   }
 
-  const channelList = <ChannelList position={pos} />
+  const exportPng = () => {
+    if (viewMode !== 'single') return
+    const base = logFile.name.replace(/\.csv$/i, '')
+    chartRef.current?.exportPng(`${base}.png`)
+  }
+
+  const channelList = <ChannelList position={pos} panelSize={panelSize} />
+
+  const resizeHandle = (
+    <ResizeHandle
+      direction={isVertical ? 'col' : 'row'}
+      invert={pos === 'right' || pos === 'bottom'}
+      currentSize={panelSize}
+      minSize={isVertical ? 140 : 80}
+      maxSize={isVertical ? 480 : 280}
+      onResize={setPanelSize}
+    />
+  )
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg)' }}>
       {/* Toolbar */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          padding: '0 14px',
-          height: 44,
-          flexShrink: 0,
-          borderBottom: '1px solid var(--border)',
-          background: 'var(--surface)'
-        }}
-      >
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '0 12px', height: 44, flexShrink: 0,
+        borderBottom: '1px solid var(--border)', background: 'var(--surface)'
+      }}>
         <ToolbarBtn onClick={() => setLogFile(null)} title="Back to home">← Back</ToolbarBtn>
         <ToolbarBtn onClick={openNew}>Open</ToolbarBtn>
-
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', opacity: 0.7 }}>
           {logFile.rowCount.toLocaleString()} rows · {logFile.channels.length} ch
         </span>
 
         <div style={{ flex: 1 }} />
+
+        {/* Export PNG — only in single view */}
+        {viewMode === 'single' && (
+          <ToolbarBtn onClick={exportPng} title="Export chart as PNG">
+            <ExportIcon /> PNG
+          </ToolbarBtn>
+        )}
 
         {/* View mode tabs */}
         <div style={{ display: 'flex', gap: 2, padding: 3, borderRadius: 6, background: 'var(--bg)', border: '1px solid var(--border)' }}>
@@ -59,17 +87,12 @@ export default function LogViewer() {
               key={m}
               onClick={() => setViewMode(m)}
               style={{
-                padding: '3px 11px',
-                borderRadius: 4,
-                border: 'none',
+                padding: '3px 11px', borderRadius: 4, border: 'none',
                 background: viewMode === m ? BRAND_RED : 'transparent',
                 color: viewMode === m ? '#fff' : 'var(--text-muted)',
-                fontSize: 11,
-                fontWeight: viewMode === m ? 700 : 500,
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
-                cursor: 'pointer',
-                transition: 'background 0.15s, color 0.15s'
+                fontSize: 11, fontWeight: viewMode === m ? 700 : 500,
+                letterSpacing: '0.1em', textTransform: 'uppercase',
+                cursor: 'pointer', transition: 'background 0.15s, color 0.15s'
               }}
             >
               {m}
@@ -80,16 +103,9 @@ export default function LogViewer() {
         <button
           onClick={() => setShowSettings(true)}
           style={{
-            width: 32,
-            height: 32,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderRadius: 6,
-            border: 'none',
-            background: 'var(--bg)',
-            color: 'var(--text-muted)',
-            cursor: 'pointer'
+            width: 32, height: 32, display: 'flex', alignItems: 'center',
+            justifyContent: 'center', borderRadius: 6, border: 'none',
+            background: 'var(--bg)', color: 'var(--text-muted)', cursor: 'pointer'
           }}
           title="Settings"
         >
@@ -97,24 +113,20 @@ export default function LogViewer() {
         </button>
       </div>
 
-      {/* Body: channel list can be top/bottom/left/right */}
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: isVerticalPanel ? 'row' : 'column' }}>
-        {pos === 'top' && channelList}
-        {pos === 'left' && channelList}
+      {/* Body */}
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: isVertical ? 'row' : 'column' }}>
+        {pos === 'top'  && <>{channelList}{resizeHandle}</>}
+        {pos === 'left' && <>{channelList}{resizeHandle}</>}
 
         {/* Chart area */}
         <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          {viewMode === 'raw' ? (
-            <RawView logFile={logFile} />
-          ) : viewMode === 'split' ? (
-            <SplitView />
-          ) : (
-            <SingleView />
-          )}
+          {viewMode === 'raw'    ? <RawView   logFile={logFile} /> :
+           viewMode === 'split'  ? <SplitView /> :
+                                   <SingleView chartRef={chartRef} />}
         </div>
 
-        {pos === 'right' && channelList}
-        {pos === 'bottom' && channelList}
+        {pos === 'right'  && <>{resizeHandle}{channelList}</>}
+        {pos === 'bottom' && <>{resizeHandle}{channelList}</>}
       </div>
 
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
@@ -122,33 +134,63 @@ export default function LogViewer() {
   )
 }
 
-function ToolbarBtn({ children, onClick, title }: { children: React.ReactNode; onClick: () => void; title?: string }) {
+// ─── Resize handle ────────────────────────────────────────────────────────────
+
+function ResizeHandle({
+  direction, invert, currentSize, minSize, maxSize, onResize
+}: {
+  direction: 'col' | 'row'
+  invert: boolean
+  currentSize: number
+  minSize: number
+  maxSize: number
+  onResize: (size: number) => void
+}) {
+  const [active, setActive] = useState(false)
+
+  const onMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault()
+    setActive(true)
+    const startPos  = direction === 'col' ? e.clientX : e.clientY
+    const startSize = currentSize
+
+    const onMove = (me: MouseEvent) => {
+      const currentPos = direction === 'col' ? me.clientX : me.clientY
+      const delta = (currentPos - startPos) * (invert ? -1 : 1)
+      onResize(Math.max(minSize, Math.min(maxSize, startSize + delta)))
+    }
+    const onUp = () => {
+      setActive(false)
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+
+  const isCol = direction === 'col'
   return (
-    <button
-      onClick={onClick}
-      title={title}
+    <div
+      onMouseDown={onMouseDown}
+      onMouseEnter={() => setActive(true)}
+      onMouseLeave={(e) => { if (e.buttons === 0) setActive(false) }}
       style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 4,
-        fontSize: 11,
-        padding: '4px 8px',
-        borderRadius: 5,
-        border: 'none',
-        background: 'var(--bg)',
-        color: 'var(--text-muted)',
-        cursor: 'pointer',
-        transition: 'color 0.15s'
+        flexShrink: 0,
+        width:  isCol ? 4 : '100%',
+        height: isCol ? '100%' : 4,
+        cursor: isCol ? 'col-resize' : 'row-resize',
+        background: active ? BRAND_RED : 'var(--border)',
+        transition: 'background 0.15s',
+        position: 'relative',
+        zIndex: 5
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text)' }}
-      onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)' }}
-    >
-      {children}
-    </button>
+    />
   )
 }
 
-function SingleView() {
+// ─── Views ────────────────────────────────────────────────────────────────────
+
+function SingleView({ chartRef }: { chartRef: React.Ref<ChartHandle> }) {
   const { logFile } = useStore()
   const containerRef = useRef<HTMLDivElement>(null)
   const [h, setH] = useState(400)
@@ -165,7 +207,7 @@ function SingleView() {
   if (!logFile) return null
   return (
     <div ref={containerRef} style={{ flex: 1, minHeight: 0, padding: '4px 6px 0', overflow: 'hidden' }}>
-      <Chart logFile={logFile} height={h} />
+      <Chart ref={chartRef} logFile={logFile} height={h} />
     </div>
   )
 }
@@ -210,14 +252,7 @@ function RawView({ logFile }: { logFile: NonNullable<ReturnType<typeof useStore>
         <thead>
           <tr style={{ background: 'var(--surface)', position: 'sticky', top: 0, zIndex: 1 }}>
             {cols.map((c) => (
-              <th
-                key={c}
-                style={{
-                  textAlign: 'left', padding: '7px 12px',
-                  whiteSpace: 'nowrap', fontWeight: 600,
-                  borderBottom: '1px solid var(--border)', color: 'var(--text-muted)'
-                }}
-              >
+              <th key={c} style={{ textAlign: 'left', padding: '7px 12px', whiteSpace: 'nowrap', fontWeight: 600, borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>
                 {c}
               </th>
             ))}
@@ -251,6 +286,35 @@ function RawView({ logFile }: { logFile: NonNullable<ReturnType<typeof useStore>
     </div>
   )
 }
+
+// ─── Small components ─────────────────────────────────────────────────────────
+
+function ToolbarBtn({ children, onClick, title }: { children: React.ReactNode; onClick: () => void; title?: string }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 4,
+        fontSize: 11, padding: '4px 8px', borderRadius: 5,
+        border: 'none', background: 'var(--bg)', color: 'var(--text-muted)',
+        cursor: 'pointer', transition: 'color 0.15s', letterSpacing: '0.03em'
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text)' }}
+      onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)' }}
+    >
+      {children}
+    </button>
+  )
+}
+
+const ExportIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
+  </svg>
+)
 
 const GearIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

@@ -5,9 +5,10 @@ import type { PanelPosition } from '../types'
 
 interface ChannelListProps {
   position: PanelPosition
+  panelSize?: number
 }
 
-export default function ChannelList({ position }: ChannelListProps) {
+export default function ChannelList({ position, panelSize }: ChannelListProps) {
   const { logFile, toggleChannel, setChannelColor } = useStore()
   const [search, setSearch] = useState('')
   const [pickerFor, setPickerFor] = useState<string | null>(null)
@@ -37,8 +38,8 @@ export default function ChannelList({ position }: ChannelListProps) {
         display: 'flex',
         flexDirection: 'column',
         background: 'var(--surface)',
-        width:  isVertical ? 220 : undefined,
-        height: isVertical ? undefined : 134,
+        width:  isVertical ? (panelSize ?? 220) : undefined,
+        height: isVertical ? undefined : (panelSize ?? 130),
         ...border
       }}
     >
