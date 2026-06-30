@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import type { LogFile } from '../types'
@@ -11,6 +11,7 @@ interface ChartProps {
 export default function Chart({ logFile, height = 400 }: ChartProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const plotRef = useRef<uPlot | null>(null)
+  const [isZoomed, setIsZoomed] = useState(false)
 
   const visibleChannels = logFile.channels.filter((c) => c.visible)
 
@@ -18,12 +19,15 @@ export default function Chart({ logFile, height = 400 }: ChartProps) {
     if (!containerRef.current) return
     if (visibleChannels.length === 0) return
 
-    // Destroy previous instance
     plotRef.current?.destroy()
     plotRef.current = null
+    setIsZoomed(false)
 
     const el = containerRef.current
     const w = el.clientWidth || 800
+
+    const fullXMin = logFile.timestamps[0]
+    const fullXMax = logFile.timestamps[logFile.timestamps.length - 1]
 
     const series: uPlot.Series[] = [
       { label: 'Time' },
@@ -45,8 +49,10 @@ export default function Chart({ logFile, height = 400 }: ChartProps) {
       height,
       class: 'logview-chart',
       cursor: {
-        sync: { key: 'logview' }
+        sync: { key: 'logview' },
+        drag: { x: false, y: false }
       },
+      select: { show: false, left: 0, top: 0, width: 0, height: 0 },
       legend: { show: false },
       scales: {
         x: { time: false },
@@ -70,7 +76,10 @@ export default function Chart({ logFile, height = 400 }: ChartProps) {
         }
       ],
       series,
-      plugins: [tooltipPlugin()]
+      plugins: [
+        tooltipPlugin(),
+        wheelZoomPlugin(fullXMin, fullXMax, setIsZoomed)
+      ]
     }
 
     plotRef.current = new uPlot(opts, data, el)
@@ -89,6 +98,13 @@ export default function Chart({ logFile, height = 400 }: ChartProps) {
     }
   }, [logFile, visibleChannels.map((c) => c.name + c.color).join(), height])
 
+  const resetZoom = () => {
+    if (!plotRef.current) return
+    const ts = logFile.timestamps
+    plotRef.current.setScale('x', { min: ts[0], max: ts[ts.length - 1] })
+    setIsZoomed(false)
+  }
+
   if (visibleChannels.length === 0) {
     return (
       <div
@@ -100,11 +116,141 @@ export default function Chart({ logFile, height = 400 }: ChartProps) {
     )
   }
 
-  return <div ref={containerRef} style={{ width: '100%' }} />
+  return (
+    <div style={{ position: 'relative', width: '100%' }}>
+      <div ref={containerRef} style={{ width: '100%' }} />
+      {isZoomed && (
+        <button
+          onClick={resetZoom}
+          title="Reset zoom (double-click chart)"
+          style={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            padding: '3px 10px',
+            borderRadius: 6,
+            fontSize: 11,
+            fontWeight: 600,
+            background: 'rgba(124,110,247,0.18)',
+            border: '1px solid rgba(124,110,247,0.5)',
+            color: '#a78bfa',
+            cursor: 'pointer',
+            backdropFilter: 'blur(4px)',
+            zIndex: 10
+          }}
+        >
+          Reset Zoom
+        </button>
+      )}
+    </div>
+  )
 }
 
 function getCSS(v: string) {
   return getComputedStyle(document.documentElement).getPropertyValue(v).trim() || '#333'
+}
+
+function wheelZoomPlugin(
+  fullXMin: number,
+  fullXMax: number,
+  onZoomChange: (zoomed: boolean) => void
+): uPlot.Plugin {
+  const ZOOM_FACTOR = 0.75  // scroll up zooms to 75% of current range
+  let isPanning = false
+  let panStartClientX = 0
+  let panStartMin = 0
+  let panStartMax = 0
+
+  function clampScale(min: number, max: number): [number, number] {
+    const range = max - min
+    const fullRange = fullXMax - fullXMin
+    // Prevent zooming beyond the data or past a very small range
+    if (range < fullRange * 0.0005) return [min, min + fullRange * 0.0005]
+    if (min < fullXMin) return [fullXMin, Math.min(fullXMin + range, fullXMax)]
+    if (max > fullXMax) return [Math.max(fullXMax - range, fullXMin), fullXMax]
+    return [min, max]
+  }
+
+  function isFullRange(u: uPlot): boolean {
+    const xMin = u.scales.x.min ?? fullXMin
+    const xMax = u.scales.x.max ?? fullXMax
+    return Math.abs(xMin - fullXMin) < 1e-9 && Math.abs(xMax - fullXMax) < 1e-9
+  }
+
+  return {
+    hooks: {
+      init(u) {
+        const over = u.over
+
+        // ── Scroll wheel: zoom X axis centred on cursor ──
+        over.addEventListener(
+          'wheel',
+          (e) => {
+            e.preventDefault()
+
+            const xMin = u.scales.x.min ?? fullXMin
+            const xMax = u.scales.x.max ?? fullXMax
+
+            // Cursor position in data coordinates
+            const cursorLeft = u.cursor.left ?? (u.bbox.width / devicePixelRatio) / 2
+            const cursorVal = u.posToVal(cursorLeft, 'x')
+
+            const factor = e.deltaY < 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR
+            let newMin = cursorVal - (cursorVal - xMin) * factor
+            let newMax = cursorVal + (xMax - cursorVal) * factor
+            ;[newMin, newMax] = clampScale(newMin, newMax)
+
+            u.setScale('x', { min: newMin, max: newMax })
+            onZoomChange(!isFullRange(u))
+          },
+          { passive: false }
+        )
+
+        // ── Left-click drag: pan ──
+        over.addEventListener('mousedown', (e) => {
+          if (e.button !== 0) return
+          isPanning = true
+          panStartClientX = e.clientX
+          panStartMin = u.scales.x.min ?? fullXMin
+          panStartMax = u.scales.x.max ?? fullXMax
+          over.style.cursor = 'grabbing'
+        })
+
+        window.addEventListener('mousemove', (e) => {
+          if (!isPanning) return
+          const range = panStartMax - panStartMin
+          const pxWidth = u.bbox.width / devicePixelRatio
+          if (pxWidth === 0) return
+          const valPerPx = range / pxWidth
+          const delta = -(e.clientX - panStartClientX) * valPerPx
+          let [newMin, newMax] = clampScale(panStartMin + delta, panStartMax + delta)
+          // Keep range constant while panning
+          const clampedRange = newMax - newMin
+          if (Math.abs(clampedRange - range) > 1e-9) {
+            if (newMin === fullXMin) newMax = fullXMin + range
+            else newMin = fullXMax - range
+          }
+          u.setScale('x', { min: newMin, max: newMax })
+          onZoomChange(!isFullRange(u))
+        })
+
+        const stopPan = () => {
+          if (isPanning) {
+            isPanning = false
+            over.style.cursor = ''
+          }
+        }
+        window.addEventListener('mouseup', stopPan)
+        window.addEventListener('mouseleave', stopPan)
+
+        // ── Double-click: reset to full range ──
+        over.addEventListener('dblclick', () => {
+          u.setScale('x', { min: fullXMin, max: fullXMax })
+          onZoomChange(false)
+        })
+      }
+    }
+  }
 }
 
 function tooltipPlugin(): uPlot.Plugin {
