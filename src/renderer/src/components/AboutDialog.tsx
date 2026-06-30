@@ -39,14 +39,14 @@ export default function AboutDialog({ onClose }: { onClose: () => void }) {
           {/* Logo */}
           <img
             src={logoSrc}
-            alt="Toxic Tuning"
+            alt="ProTune"
             draggable={false}
-            style={{ height: 38, borderRadius: 4, marginBottom: 18, display: 'block', margin: '0 auto 18px' }}
+            style={{ height: 44, borderRadius: 6, marginBottom: 18, display: 'block', margin: '0 auto 18px' }}
           />
 
           {/* App name */}
           <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text)' }}>
-            Interstellar
+            ProTune Analyzer
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3, marginBottom: 22, opacity: 0.6 }}>
             Version {version}
@@ -57,10 +57,10 @@ export default function AboutDialog({ onClose }: { onClose: () => void }) {
             Designed &amp; built by
           </div>
           <div style={{ fontSize: 17, fontWeight: 800, color: BRAND_RED, marginBottom: 4, letterSpacing: '-0.01em' }}>
-            Wayne M.
+            William
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 22 }}>
-            Toxic Tuning &nbsp;·&nbsp; South Africa 🇿🇦
+            ProTune &nbsp;·&nbsp; Performance Through Technology
           </div>
 
           {/* Divider */}
@@ -68,7 +68,7 @@ export default function AboutDialog({ onClose }: { onClose: () => void }) {
 
           {/* Legal */}
           <div style={{ fontSize: 11, color: 'var(--text-muted)', opacity: 0.6, marginBottom: 3 }}>
-            © {new Date().getFullYear()} Toxic Tuning. All rights reserved.
+            © {new Date().getFullYear()} ProTune. All rights reserved.
           </div>
           <div style={{ fontSize: 10, color: 'var(--text-muted)', opacity: 0.4, marginBottom: 16, lineHeight: 1.5 }}>
             Unauthorised copying or distribution of this software,<br />

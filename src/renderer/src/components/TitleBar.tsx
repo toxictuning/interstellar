@@ -32,12 +32,12 @@ export default function TitleBar() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <img
             src={logoSrc}
-            alt="Toxic Tuning"
+            alt="ProTune"
             style={{
-              height: 18,
+              height: 22,
               width: 'auto',
               objectFit: 'contain',
-              borderRadius: 2,
+              borderRadius: 3,
               display: 'block'
             }}
             draggable={false}
@@ -64,7 +64,7 @@ export default function TitleBar() {
               lineHeight: 1
             }}
           >
-            Interstellar
+            ProTune Analyzer
           </span>
 
           {/* File name */}

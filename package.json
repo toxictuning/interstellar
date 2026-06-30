@@ -1,11 +1,10 @@
 {
-  "name": "interstellar",
+  "name": "protune-analyzer",
   "version": "1.1.3",
-  "description": "Fast CSV data log viewer for automotive and engineering logs",
+  "description": "ProTune data log analyzer — Performance Through Technology",
   "main": "out/main/index.js",
   "author": {
-    "name": "Toxic Tuning",
-    "email": "waynemodz@gmail.com"
+    "name": "ProTune"
   },
   "homepage": "https://github.com/toxictuning/interstellar",
   "repository": {
@@ -46,9 +45,9 @@
     "vite": "^5.4.19"
   },
   "build": {
-    "appId": "com.toxictuning.interstellar",
-    "productName": "Interstellar",
-    "copyright": "Copyright © 2026 Toxic Tuning",
+    "appId": "com.protune.analyzer",
+    "productName": "ProTune Analyzer",
+    "copyright": "Copyright © 2026 ProTune",
     "publish": {
       "provider": "github",
       "owner": "toxictuning",
@@ -66,7 +65,7 @@
         {
           "ext": "csv",
           "name": "CSV Log File",
-          "description": "Open with Interstellar",
+          "description": "Open with ProTune Analyzer",
           "role": "Editor"
         }
       ]
@@ -76,7 +75,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Interstellar"
+      "shortcutName": "ProTune Analyzer"
     },
     "directories": {
       "output": "dist",
