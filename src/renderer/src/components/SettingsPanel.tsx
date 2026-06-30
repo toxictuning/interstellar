@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useStore } from '../store'
-import { THEMES, DEFAULT_CHANNEL_COLORS } from '../themes'
+import { THEMES, DEFAULT_CHANNEL_COLORS, BRAND_RED } from '../themes'
 import type { ThemeName } from '../types'
 
 export default function SettingsPanel({ onClose }: { onClose: () => void }) {
@@ -44,9 +44,9 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                 onClick={() => setTheme(t)}
                 className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
                 style={{
-                  background: settings.theme === t ? 'var(--accent)' : THEMES[t].surface,
+                  background: settings.theme === t ? BRAND_RED : THEMES[t].surface,
                   color: settings.theme === t ? '#fff' : THEMES[t].text,
-                  border: `1px solid ${settings.theme === t ? 'var(--accent)' : THEMES[t].border}`
+                  border: `1px solid ${settings.theme === t ? BRAND_RED : THEMES[t].border}`
                 }}
               >
                 {THEMES[t].label}
@@ -114,7 +114,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
           <button
             onClick={save}
             className="px-5 py-2 rounded-lg text-sm font-bold"
-            style={{ background: 'var(--accent)', color: '#fff' }}
+            style={{ background: BRAND_RED, color: '#fff' }}
           >
             Save
           </button>

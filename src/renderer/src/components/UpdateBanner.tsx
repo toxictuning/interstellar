@@ -1,4 +1,5 @@
 import { useStore } from '../store'
+import { BRAND_RED } from '../themes'
 
 export default function UpdateBanner() {
   const { updateAvailable, updateDownloaded, updateProgress, setUpdateAvailable } = useStore()
@@ -6,16 +7,23 @@ export default function UpdateBanner() {
   if (updateDownloaded) {
     return (
       <div
-        className="flex items-center justify-between px-4 py-2 text-xs shrink-0"
-        style={{ background: '#16a34a22', borderBottom: '1px solid #16a34a44', color: '#4ade80' }}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '7px 16px', flexShrink: 0,
+          background: 'rgba(22,163,74,0.12)', borderBottom: '1px solid rgba(22,163,74,0.25)',
+          color: '#4ade80', fontSize: 12
+        }}
       >
         <span>Update downloaded — restart to apply</span>
         <button
           onClick={() => window.api.installUpdate()}
-          className="px-3 py-1 rounded-lg font-bold"
-          style={{ background: '#16a34a', color: '#fff' }}
+          style={{
+            padding: '4px 12px', borderRadius: 4, border: 'none',
+            background: '#16a34a', color: '#fff', fontSize: 11,
+            fontWeight: 700, letterSpacing: '0.08em', cursor: 'pointer'
+          }}
         >
-          Restart & Install
+          Restart &amp; Install
         </button>
       </div>
     )
@@ -24,15 +32,16 @@ export default function UpdateBanner() {
   if (updateProgress !== null) {
     return (
       <div
-        className="flex items-center gap-3 px-4 py-2 text-xs shrink-0"
-        style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', color: 'var(--text)' }}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '7px 16px', flexShrink: 0,
+          background: 'var(--surface)', borderBottom: '1px solid var(--border)',
+          color: 'var(--text-muted)', fontSize: 12
+        }}
       >
-        <span>Downloading update... {updateProgress}%</span>
-        <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: 'var(--border)' }}>
-          <div
-            className="h-full rounded-full transition-all"
-            style={{ width: `${updateProgress}%`, background: 'var(--accent)' }}
-          />
+        <span style={{ whiteSpace: 'nowrap' }}>Downloading update… {updateProgress}%</span>
+        <div style={{ flex: 1, height: 2, borderRadius: 1, background: 'var(--border)', overflow: 'hidden' }}>
+          <div style={{ width: `${updateProgress}%`, height: '100%', background: BRAND_RED, transition: 'width 0.3s' }} />
         </div>
       </div>
     )
@@ -41,22 +50,32 @@ export default function UpdateBanner() {
   if (updateAvailable) {
     return (
       <div
-        className="flex items-center justify-between px-4 py-2 text-xs shrink-0"
-        style={{ background: '#7c6ef722', borderBottom: '1px solid #7c6ef744', color: '#a78bfa' }}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '7px 16px', flexShrink: 0,
+          background: 'rgba(229,0,10,0.08)', borderBottom: '1px solid rgba(229,0,10,0.2)',
+          color: 'rgba(229,0,10,0.9)', fontSize: 12
+        }}
       >
         <span>Update v{updateAvailable.version} available</span>
-        <div className="flex gap-2">
+        <div style={{ display: 'flex', gap: 8 }}>
           <button
             onClick={() => window.api.downloadUpdate()}
-            className="px-3 py-1 rounded-lg font-bold"
-            style={{ background: 'var(--accent)', color: '#fff' }}
+            style={{
+              padding: '4px 12px', borderRadius: 4, border: 'none',
+              background: BRAND_RED, color: '#fff', fontSize: 11,
+              fontWeight: 700, letterSpacing: '0.08em', cursor: 'pointer'
+            }}
           >
             Download
           </button>
           <button
             onClick={() => setUpdateAvailable(null)}
-            className="px-2 py-1 rounded-lg"
-            style={{ color: 'var(--text-muted)' }}
+            style={{
+              padding: '4px 8px', borderRadius: 4, border: 'none',
+              background: 'transparent', color: 'var(--text-muted)',
+              fontSize: 11, cursor: 'pointer'
+            }}
           >
             Later
           </button>

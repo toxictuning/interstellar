@@ -4,6 +4,7 @@ import { parseCSV } from '../csvParser'
 import Chart from './Chart'
 import ChannelList from './ChannelList'
 import SettingsPanel from './SettingsPanel'
+import { BRAND_RED } from '../themes'
 import type { ViewMode } from '../types'
 
 export default function LogViewer() {
@@ -55,17 +56,32 @@ export default function LogViewer() {
 
         {/* View mode tabs */}
         <div
-          className="flex items-center gap-0.5 p-0.5 rounded-lg"
-          style={{ background: 'var(--bg)' }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2,
+            padding: 3,
+            borderRadius: 6,
+            background: 'var(--bg)',
+            border: '1px solid var(--border)'
+          }}
         >
           {(['single', 'split', 'raw'] as ViewMode[]).map((m) => (
             <button
               key={m}
               onClick={() => setViewMode(m)}
-              className="px-3 py-1 rounded-md text-xs font-medium capitalize transition-colors"
               style={{
-                background: viewMode === m ? 'var(--accent)' : 'transparent',
-                color: viewMode === m ? '#fff' : 'var(--text-muted)'
+                padding: '3px 12px',
+                borderRadius: 4,
+                border: 'none',
+                background: viewMode === m ? BRAND_RED : 'transparent',
+                color: viewMode === m ? '#fff' : 'var(--text-muted)',
+                fontSize: 11,
+                fontWeight: viewMode === m ? 700 : 500,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+                transition: 'background 0.15s, color 0.15s'
               }}
             >
               {m}

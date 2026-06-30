@@ -1,76 +1,81 @@
 import type { Theme, ThemeName } from './types'
 
+// Toxic Tuning brand red
+export const BRAND_RED = '#E5000A'
+export const BRAND_RED_DIM = 'rgba(229,0,10,0.15)'
+export const BRAND_RED_GLOW = 'rgba(229,0,10,0.35)'
+
 export const THEMES: Record<ThemeName, Theme> = {
   dark: {
     name: 'dark',
     label: 'Dark',
-    bg: '#0f1117',
-    surface: '#1a1d27',
-    border: '#2a2d3a',
-    text: '#e2e8f0',
-    textMuted: '#64748b',
-    accent: '#7c6ef7',
-    chartBg: '#0f1117',
-    gridColor: '#1e2130',
-    axisColor: '#3a3d50'
+    bg: '#0a0b0f',
+    surface: '#12141a',
+    border: '#1e2028',
+    text: '#e8eaf0',
+    textMuted: '#4a5068',
+    accent: BRAND_RED,
+    chartBg: '#0a0b0f',
+    gridColor: '#16181f',
+    axisColor: '#2a2d3a'
   },
   midnight: {
     name: 'midnight',
-    label: 'Midnight Blue',
-    bg: '#050a18',
-    surface: '#0d1626',
-    border: '#1a2540',
-    text: '#c9d8f0',
-    textMuted: '#4a6080',
-    accent: '#3d8ef0',
-    chartBg: '#050a18',
-    gridColor: '#0d1626',
-    axisColor: '#1a2540'
+    label: 'Midnight',
+    bg: '#05080f',
+    surface: '#0b1020',
+    border: '#141d34',
+    text: '#c8d4f0',
+    textMuted: '#3d5070',
+    accent: BRAND_RED,
+    chartBg: '#05080f',
+    gridColor: '#0b1020',
+    axisColor: '#141d34'
   },
   nord: {
     name: 'nord',
     label: 'Nord',
-    bg: '#2e3440',
-    surface: '#3b4252',
-    border: '#434c5e',
+    bg: '#242933',
+    surface: '#2e3440',
+    border: '#3b4252',
     text: '#eceff4',
-    textMuted: '#7b88a1',
-    accent: '#88c0d0',
-    chartBg: '#2e3440',
-    gridColor: '#3b4252',
-    axisColor: '#434c5e'
+    textMuted: '#6b7899',
+    accent: BRAND_RED,
+    chartBg: '#242933',
+    gridColor: '#2e3440',
+    axisColor: '#3b4252'
   },
   solarized: {
     name: 'solarized',
-    label: 'Solarized Dark',
-    bg: '#002b36',
-    surface: '#073642',
-    border: '#124652',
-    text: '#839496',
-    textMuted: '#586e75',
-    accent: '#268bd2',
-    chartBg: '#002b36',
-    gridColor: '#073642',
-    axisColor: '#124652'
+    label: 'Solarized',
+    bg: '#001f29',
+    surface: '#002b36',
+    border: '#073642',
+    text: '#93a1a1',
+    textMuted: '#506e75',
+    accent: BRAND_RED,
+    chartBg: '#001f29',
+    gridColor: '#002b36',
+    axisColor: '#073642'
   },
   light: {
     name: 'light',
     label: 'Light',
-    bg: '#f8fafc',
+    bg: '#f4f5f7',
     surface: '#ffffff',
-    border: '#e2e8f0',
-    text: '#1e293b',
-    textMuted: '#94a3b8',
-    accent: '#7c6ef7',
+    border: '#e2e5eb',
+    text: '#111318',
+    textMuted: '#8892a4',
+    accent: BRAND_RED,
     chartBg: '#ffffff',
-    gridColor: '#f1f5f9',
-    axisColor: '#cbd5e1'
+    gridColor: '#f0f1f4',
+    axisColor: '#d8dbe3'
   }
 }
 
 export const DEFAULT_CHANNEL_COLORS = [
-  '#ff3d71', '#00d4ff', '#a78bfa', '#34d399', '#fbbf24',
-  '#fb923c', '#f472b6', '#60a5fa', '#4ade80', '#e879f9',
-  '#38bdf8', '#f87171', '#a3e635', '#c084fc', '#2dd4bf',
-  '#fb7185', '#818cf8', '#86efac', '#fcd34d', '#67e8f9'
+  '#E5000A', '#00c8ff', '#a78bfa', '#10d980', '#f59e0b',
+  '#f97316', '#ec4899', '#3b82f6', '#22c55e', '#d946ef',
+  '#06b6d4', '#ef4444', '#84cc16', '#8b5cf6', '#14b8a6',
+  '#fb7185', '#6366f1', '#4ade80', '#fbbf24', '#38bdf8'
 ]
